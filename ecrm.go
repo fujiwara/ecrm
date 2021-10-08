@@ -2,40 +2,42 @@ package ecrm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/Songmu/prompter"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 )
 
 type App struct {
-	ctx context.Context
-	ecr *ecr.Client
-	ecs *ecs.Client
+	ctx    context.Context
+	ecr    *ecr.Client
+	ecs    *ecs.Client
+	region string
 }
 
 type taskdef struct {
-	name string
-	rev  int
+	name     string
+	revision int
 }
 
 func (td taskdef) String() string {
-	return fmt.Sprintf("%s:%d", td.name, td.rev)
-}
-
-type aliveTags struct {
-	RepositoryName string   `json:"repositoryName"`
-	Tags           []string `json:"tags"`
+	return fmt.Sprintf("%s:%d", td.name, td.revision)
 }
 
 type Command struct {
-	RepositoryName    string
-	Keeps             int
-	DeregisterTaskDef bool
+	Cluster    string
+	Repository string
+	Expires    time.Duration
+	Delete     bool
+	Force      bool
 }
 
 func New(ctx context.Context, region string) (*App, error) {
@@ -43,10 +45,12 @@ func New(ctx context.Context, region string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &App{
-		ctx: ctx,
-		ecr: ecr.NewFromConfig(cfg),
-		ecs: ecs.NewFromConfig(cfg),
+		region: cfg.Region,
+		ctx:    ctx,
+		ecr:    ecr.NewFromConfig(cfg),
+		ecs:    ecs.NewFromConfig(cfg),
 	}, nil
 }
 
@@ -64,9 +68,115 @@ func (app *App) clusterArns() ([]string, error) {
 }
 
 func (app *App) Run(c *Command) error {
-	clusterArns, err := app.clusterArns()
+	images, err := app.Scan(c.Cluster)
 	if err != nil {
 		return err
+	}
+
+	if c.Repository != "" {
+		ids, err := app.ImageIdentifiersToPurge(c.Repository, c.Expires, images)
+		if err != nil {
+			return err
+		}
+		return app.DeleteImages(c.Repository, ids, c.Delete)
+	}
+
+	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, &ecr.DescribeRepositoriesInput{})
+	for p.HasMorePages() {
+		repos, err := p.NextPage(app.ctx)
+		if err != nil {
+			return err
+		}
+		for _, repo := range repos.Repositories {
+			ids, err := app.ImageIdentifiersToPurge(*repo.RepositoryName, c.Expires, images)
+			if err != nil {
+				return err
+			}
+			if err := app.DeleteImages(*repo.RepositoryName, ids, c.Delete); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, doDelete bool) error {
+	if len(ids) == 0 {
+		log.Println("[info] no need to delete images for repo", repo)
+		return nil
+	}
+	if !doDelete {
+		log.Printf("[info] To delete expired %d images on %s, set --delete", len(ids), repo)
+		return nil
+	}
+	if !prompter.YN(fmt.Sprintf("Delete %d images on %s?", len(ids), repo), false) {
+		return errors.New("aborted")
+	}
+
+	for _, id := range ids {
+		log.Printf("[info] Deleting %s %s", repo, *id.ImageDigest)
+	}
+	_, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
+		ImageIds:       ids,
+		RepositoryName: &repo,
+	})
+	if err != nil {
+		return err
+	}
+	log.Printf("[info] Deleted %s %d images", repo, len(ids))
+	return err
+}
+
+func (app *App) ImageIdentifiersToPurge(name string, expires time.Duration, holdImages map[string]bool) ([]types.ImageIdentifier, error) {
+	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
+		RepositoryName: &name,
+	})
+	ids := make([]types.ImageIdentifier, 0)
+	expireTime := time.Now().Add(-expires)
+	for p.HasMorePages() {
+		imgs, err := p.NextPage(app.ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range imgs.ImageDetails {
+			hold := false
+			for _, tag := range d.ImageTags {
+				imageArn := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag)
+				if holdImages[imageArn] {
+					hold = true
+					break
+				}
+			}
+			if hold {
+				continue
+			}
+			at := *d.ImagePushedAt
+			if at.Before(expireTime) {
+				log.Printf(
+					"[info] expired %s:{%s} %s pushd:%s",
+					*d.RepositoryName,
+					strings.Join(d.ImageTags, ","),
+					*d.ImageDigest,
+					at.Format(time.RFC3339),
+				)
+				ids = append(ids, types.ImageIdentifier{ImageDigest: d.ImageDigest})
+			}
+		}
+	}
+	return ids, nil
+}
+
+func (app *App) Scan(cluster string) (map[string]bool, error) {
+	var clusterArns []string
+	var err error
+	if cluster == "" {
+		log.Printf("[info] Checking ECS clusters")
+		clusterArns, err = app.clusterArns()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		clusterArns = append(clusterArns, cluster)
 	}
 
 	tds := make([]taskdef, 0)
@@ -74,70 +184,29 @@ func (app *App) Run(c *Command) error {
 		log.Printf("[info] Checking cluster %s", clusterArn)
 		_tds, err := app.availableTaskDefinitions(clusterArn)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		tds = append(tds, _tds...)
 	}
 
-	availableTds := make([]string, 0)
-	outdatedTds := make([]string, 0)
-	for _, minTd := range minimumTaskDefinitions(tds) {
-		fmt.Println("mininum taskdef", minTd)
-		tdp := ecs.NewListTaskDefinitionsPaginator(app.ecs, &ecs.ListTaskDefinitionsInput{
-			FamilyPrefix: &minTd.name,
-		})
-		for tdp.HasMorePages() {
-			tdo, err := tdp.NextPage(app.ctx)
-			if err != nil {
-				return err
-			}
-			for _, tdArn := range tdo.TaskDefinitionArns {
-				r := strings.Split(tdArn, ":")
-				rev, _ := strconv.Atoi(r[len(r)-1])
-				if rev < minTd.rev-c.Keeps {
-					log.Println("[info] Outdated", tdArn)
-					outdatedTds = append(outdatedTds, tdArn)
-				} else {
-					log.Println("[info] Available", tdArn)
-					availableTds = append(availableTds, tdArn)
-				}
-			}
-		}
-	}
-
-	removableImages := make(map[string]bool)
-	for _, tdArn := range outdatedTds {
-		imgs, err := app.extractECRImages(tdArn)
+	inUseImages := make(map[string]bool)
+	for _, td := range tds {
+		imgs, err := app.extractECRImages(td.String())
 		if err != nil {
-			return err
-		}
-		for _, img := range imgs {
-			log.Printf("[info] %s may be outdated", img)
-			removableImages[img] = true
-		}
-	}
-	for _, tdArn := range availableTds {
-		imgs, err := app.extractECRImages(tdArn)
-		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, img := range imgs {
 			log.Printf("[info] %s is in use", img)
-			removableImages[img] = false
+			inUseImages[img] = true
 		}
 	}
-	for img, ok := range removableImages {
-		if ok {
-			log.Println("[info] Removing image", img)
-		}
-	}
-	return nil
+	return inUseImages, nil
 }
 
-func (app App) extractECRImages(tdArn string) ([]string, error) {
+func (app App) extractECRImages(tdName string) ([]string, error) {
 	images := make([]string, 0)
 	out, err := app.ecs.DescribeTaskDefinition(app.ctx, &ecs.DescribeTaskDefinitionInput{
-		TaskDefinition: &tdArn,
+		TaskDefinition: &tdName,
 	})
 	if err != nil {
 		return nil, err
@@ -146,25 +215,11 @@ func (app App) extractECRImages(tdArn string) ([]string, error) {
 		img := *container.Image
 		if strings.Contains(img, ".dkr.ecr.") {
 			images = append(images, *container.Image)
+		} else {
+			log.Printf("[debug] Skipping non ECR image %s", img)
 		}
 	}
 	return images, nil
-}
-
-func minimumTaskDefinitions(tds []taskdef) []taskdef {
-	lowestTdRev := make(map[string]int)
-	for _, td := range tds {
-		if _, found := lowestTdRev[td.name]; !found {
-			lowestTdRev[td.name] = td.rev
-		} else if td.rev < lowestTdRev[td.name] {
-			lowestTdRev[td.name] = td.rev
-		}
-	}
-	var res []taskdef
-	for name, rev := range lowestTdRev {
-		res = append(res, taskdef{name: name, rev: rev})
-	}
-	return res
 }
 
 func (app *App) availableTaskDefinitions(clusterArn string) ([]taskdef, error) {
@@ -213,10 +268,12 @@ func (app *App) availableTaskDefinitions(clusterArn string) ([]taskdef, error) {
 		}
 		for _, sv := range svs.Services {
 			log.Printf("[info] Checking service %s", *sv.ServiceName)
-			td := strings.Split(*sv.TaskDefinition, "/")[1]
-			if _, found := taskDefs[td]; !found {
-				log.Printf("[info] Found taskDefinition %s in service %s", td, *sv.ServiceName)
-				taskDefs[td] = struct{}{}
+			for _, dp := range sv.Deployments {
+				td := strings.Split(*dp.TaskDefinition, "/")[1]
+				if _, found := taskDefs[td]; !found {
+					log.Printf("[info] Found taskDefinition %s in %s deployment on service %s", td, *dp.Status, *sv.ServiceName)
+					taskDefs[td] = struct{}{}
+				}
 			}
 		}
 	}
@@ -225,7 +282,7 @@ func (app *App) availableTaskDefinitions(clusterArn string) ([]taskdef, error) {
 		p := strings.SplitN(td, ":", 2)
 		name := p[0]
 		rev, _ := strconv.Atoi(p[1])
-		tds = append(tds, taskdef{name, rev})
+		tds = append(tds, taskdef{name: name, revision: rev})
 	}
 	return tds, nil
 }
