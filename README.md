@@ -45,6 +45,35 @@ repositories:
     expires: 30days
 ```
 
+### scan command
+
+```console
+$ ecrm scan --help
+NAME:
+   ecrm scan - scan ECS clusters and find unused ECR images to delete safety.
+
+USAGE:
+   ecrm scan [command options] [arguments...]
+
+OPTIONS:
+   --help, -h  show help (default: false)
+```
+
+### delete command
+
+```console
+$ ecrm delete --help
+NAME:
+   ecrm delete - scan ECS clusters and delete unused ECR images.
+
+USAGE:
+   ecrm delete [command options] [arguments...]
+
+OPTIONS:
+   --force     force delete images without confirmation (default: false) [$ECRM_FORCE]
+   --help, -h  show help (default: false)
+```
+
 ## Author
 
 Copyright (c) 2021 FUJIWARA Shunichiro

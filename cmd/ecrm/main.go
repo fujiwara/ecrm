@@ -30,7 +30,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "scan",
-				Usage: "scan ECR repositories",
+				Usage: "scan ECS clusters and find unused ECR images to delete safety.",
 				Action: func(c *cli.Context) error {
 					return ecrmApp.Run(
 						c.String("config"),
@@ -40,7 +40,7 @@ func main() {
 			},
 			{
 				Name:  "delete",
-				Usage: "delete images on ECR",
+				Usage: "scan ECS clusters and delete unused ECR images.",
 				Action: func(c *cli.Context) error {
 					return ecrmApp.Run(
 						c.String("config"),
