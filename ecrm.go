@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/Songmu/prompter"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 )
+
+var DefaultExpires = time.Hour * 24 * 30 * 12 // 1 year
 
 type App struct {
 	ctx    context.Context
@@ -32,16 +34,13 @@ func (td taskdef) String() string {
 	return fmt.Sprintf("%s:%d", td.name, td.revision)
 }
 
-type Command struct {
-	Cluster    string
-	Repository string
-	Expires    time.Duration
-	Delete     bool
-	Force      bool
+type Option struct {
+	Delete bool
+	Force  bool
 }
 
 func New(ctx context.Context, region string) (*App, error) {
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	cfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(region))
 	if err != nil {
 		return nil, err
 	}
@@ -67,18 +66,15 @@ func (app *App) clusterArns() ([]string, error) {
 	return clusters, nil
 }
 
-func (app *App) Run(c *Command) error {
-	images, err := app.Scan(c.Cluster)
+func (app *App) Run(path string, opt Option) error {
+	c, err := LoadConfig(path)
 	if err != nil {
 		return err
 	}
 
-	if c.Repository != "" {
-		ids, err := app.ImageIdentifiersToPurge(c.Repository, c.Expires, images)
-		if err != nil {
-			return err
-		}
-		return app.DeleteImages(c.Repository, ids, c.Delete)
+	images, err := app.Scan(c.Clusters)
+	if err != nil {
+		return err
 	}
 
 	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, &ecr.DescribeRepositoriesInput{})
@@ -87,12 +83,22 @@ func (app *App) Run(c *Command) error {
 		if err != nil {
 			return err
 		}
+	REPO:
 		for _, repo := range repos.Repositories {
-			ids, err := app.ImageIdentifiersToPurge(*repo.RepositoryName, c.Expires, images)
+			name := *repo.RepositoryName
+			var rc *RepositoryConfig
+			for _, r := range c.Repositories {
+				if !r.MatchName(name) {
+					continue REPO
+				}
+				rc = r
+				break
+			}
+			ids, err := app.ImageIdentifiersToPurge(name, rc, images)
 			if err != nil {
 				return err
 			}
-			if err := app.DeleteImages(*repo.RepositoryName, ids, c.Delete); err != nil {
+			if err := app.DeleteImages(*repo.RepositoryName, ids, opt.Delete); err != nil {
 				return err
 			}
 		}
@@ -102,11 +108,11 @@ func (app *App) Run(c *Command) error {
 
 func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, doDelete bool) error {
 	if len(ids) == 0 {
-		log.Println("[info] no need to delete images for repo", repo)
+		log.Println("[info] no need to delete images on", repo)
 		return nil
 	}
 	if !doDelete {
-		log.Printf("[info] To delete expired %d images on %s, set --delete", len(ids), repo)
+		log.Printf("[info] To delete expired %d image(s) on %s, run delete command", len(ids), repo)
 		return nil
 	}
 	if !prompter.YN(fmt.Sprintf("Delete %d images on %s?", len(ids), repo), false) {
@@ -127,12 +133,11 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, doDelete 
 	return err
 }
 
-func (app *App) ImageIdentifiersToPurge(name string, expires time.Duration, holdImages map[string]bool) ([]types.ImageIdentifier, error) {
+func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdImages map[string]set) ([]types.ImageIdentifier, error) {
 	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
 		RepositoryName: &name,
 	})
 	ids := make([]types.ImageIdentifier, 0)
-	expireTime := time.Now().Add(-expires)
 	for p.HasMorePages() {
 		imgs, err := p.NextPage(app.ctx)
 		if err != nil {
@@ -141,8 +146,12 @@ func (app *App) ImageIdentifiersToPurge(name string, expires time.Duration, hold
 		for _, d := range imgs.ImageDetails {
 			hold := false
 			for _, tag := range d.ImageTags {
+				if rc.MatchTag(tag) {
+					hold = true
+					break
+				}
 				imageArn := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag)
-				if holdImages[imageArn] {
+				if holdImages[imageArn] != nil && !holdImages[imageArn].isEmpty() {
 					hold = true
 					break
 				}
@@ -151,11 +160,19 @@ func (app *App) ImageIdentifiersToPurge(name string, expires time.Duration, hold
 				continue
 			}
 			at := *d.ImagePushedAt
-			if at.Before(expireTime) {
+			if rc.IsExpired(at) {
+				var tagStr string
+				if len(d.ImageTags) > 1 {
+					tagStr = "{" + strings.Join(d.ImageTags, ",") + "}"
+				} else if len(d.ImageTags) == 1 {
+					tagStr = d.ImageTags[0]
+				} else {
+					tagStr = "__UNTAGGED__"
+				}
 				log.Printf(
-					"[info] expired %s:{%s} %s pushd:%s",
+					"[info] expired %s:%s %s pushd:%s",
 					*d.RepositoryName,
-					strings.Join(d.ImageTags, ","),
+					tagStr,
 					*d.ImageDigest,
 					at.Format(time.RFC3339),
 				)
@@ -166,21 +183,23 @@ func (app *App) ImageIdentifiersToPurge(name string, expires time.Duration, hold
 	return ids, nil
 }
 
-func (app *App) Scan(cluster string) (map[string]bool, error) {
+func (app *App) Scan(clusters []*ClusterConfig) (map[string]set, error) {
 	var clusterArns []string
 	var err error
-	if cluster == "" {
-		log.Printf("[info] Checking ECS clusters")
-		clusterArns, err = app.clusterArns()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		clusterArns = append(clusterArns, cluster)
+	clusterArns, err = app.clusterArns()
+	if err != nil {
+		return nil, err
 	}
 
 	tds := make([]taskdef, 0)
+CLUSTER:
 	for _, clusterArn := range clusterArns {
+		for _, c := range clusters {
+			if !c.Match(clusterArn) {
+				continue CLUSTER
+			}
+		}
+
 		log.Printf("[info] Checking cluster %s", clusterArn)
 		_tds, err := app.availableTaskDefinitions(clusterArn)
 		if err != nil {
@@ -189,15 +208,18 @@ func (app *App) Scan(cluster string) (map[string]bool, error) {
 		tds = append(tds, _tds...)
 	}
 
-	inUseImages := make(map[string]bool)
+	inUseImages := make(map[string]set)
 	for _, td := range tds {
 		imgs, err := app.extractECRImages(td.String())
 		if err != nil {
 			return nil, err
 		}
 		for _, img := range imgs {
-			log.Printf("[info] %s is in use", img)
-			inUseImages[img] = true
+			log.Printf("[info] %s is in use by %s", img, td.String())
+			if inUseImages[img] == nil {
+				inUseImages[img] = newSet()
+			}
+			inUseImages[img].add(td.String())
 		}
 	}
 	return inUseImages, nil

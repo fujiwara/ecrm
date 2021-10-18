@@ -2,48 +2,66 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
-	"time"
+	"sort"
 
 	"github.com/fujiwara/ecrm"
-	"github.com/k1LoW/duration"
+	"github.com/urfave/cli/v2"
 )
 
-var DefaultExpires = time.Hour * 24 * 30 * 3 // 3 months
-
 func main() {
-	var repo string
-	var expires string
-	var delete bool
-	var force bool
-	ex := DefaultExpires
-
-	flag.StringVar(&repo, "repository", "", "ECR repository name")
-	flag.StringVar(&expires, "expires", "", "expiration time")
-	flag.BoolVar(&delete, "delete", false, "really　delete images")
-	flag.BoolVar(&force, "force", false, "delete withtout confirmation")
-	flag.Parse()
-
-	if expires != "" {
-		var err error
-		ex, err = duration.Parse(expires)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	c := ecrm.Command{
-		Repository: repo,
-		Expires:    ex,
-		Delete:     delete,
-	}
-
-	app, err := ecrm.New(context.Background(), os.Getenv("AWS_REGION"))
+	ecrmApp, err := ecrm.New(context.Background(), os.Getenv("AWS_REGION"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := app.Run(&c); err != nil {
+	app := &cli.App{
+		Name:  "ecrm",
+		Usage: "A command line tool for managing ECR repositories",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "config",
+				Aliases:     []string{"c"},
+				DefaultText: "ecrm.yaml",
+				Usage:       "Load configuration from `FILE`",
+				EnvVars:     []string{"ECRM_CONFIG"},
+			},
+		},
+		Commands: []*cli.Command{
+			{
+				Name:  "scan",
+				Usage: "scan ECR repositories",
+				Action: func(c *cli.Context) error {
+					return ecrmApp.Run(
+						c.String("config"),
+						ecrm.Option{Delete: false},
+					)
+				},
+			},
+			{
+				Name:  "delete",
+				Usage: "delete images on ECR",
+				Action: func(c *cli.Context) error {
+					return ecrmApp.Run(
+						c.String("config"),
+						ecrm.Option{Delete: true},
+					)
+				},
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "force",
+						Usage:   "force delete images without confirmation",
+						EnvVars: []string{"ECRM_FORCE"},
+					},
+				},
+			},
+		},
+	}
+
+	sort.Sort(cli.FlagsByName(app.Flags))
+	sort.Sort(cli.CommandsByName(app.Commands))
+
+	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
