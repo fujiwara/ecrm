@@ -19,8 +19,8 @@ USAGE:
    ecrm [global options] command [command options] [arguments...]
 
 COMMANDS:
-   delete   delete images on ECR
-   scan     scan ECR repositories
+   delete   scan ECS clusters and delete unused ECR images.
+   scan     scan ECS clusters and find unused ECR images to delete safety.
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
