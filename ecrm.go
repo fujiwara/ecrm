@@ -98,7 +98,7 @@ func (app *App) Run(path string, opt Option) error {
 			if err != nil {
 				return err
 			}
-			if err := app.DeleteImages(*repo.RepositoryName, ids, opt.Delete); err != nil {
+			if err := app.DeleteImages(*repo.RepositoryName, ids, opt); err != nil {
 				return err
 			}
 		}
@@ -106,17 +106,19 @@ func (app *App) Run(path string, opt Option) error {
 	return nil
 }
 
-func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, doDelete bool) error {
+func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Option) error {
 	if len(ids) == 0 {
 		log.Println("[info] no need to delete images on", repo)
 		return nil
 	}
-	if !doDelete {
+	if !opt.Delete {
 		log.Printf("[info] To delete expired %d image(s) on %s, run delete command", len(ids), repo)
 		return nil
 	}
-	if !prompter.YN(fmt.Sprintf("Delete %d images on %s?", len(ids), repo), false) {
-		return errors.New("aborted")
+	if !opt.Force {
+		if !prompter.YN(fmt.Sprintf("Delete %d images on %s?", len(ids), repo), false) {
+			return errors.New("aborted")
+		}
 	}
 
 	for _, id := range ids {
@@ -130,7 +132,7 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, doDelete 
 		return err
 	}
 	log.Printf("[info] Deleted %s %d images", repo, len(ids))
-	return err
+	return nil
 }
 
 func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdImages map[string]set) ([]types.ImageIdentifier, error) {

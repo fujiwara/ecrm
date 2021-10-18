@@ -44,7 +44,10 @@ func main() {
 				Action: func(c *cli.Context) error {
 					return ecrmApp.Run(
 						c.String("config"),
-						ecrm.Option{Delete: true},
+						ecrm.Option{
+							Delete: true,
+							Force:  c.Bool("force"),
+						},
 					)
 				},
 				Flags: []cli.Flag{
