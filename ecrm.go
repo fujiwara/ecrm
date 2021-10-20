@@ -112,7 +112,7 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Optio
 		return nil
 	}
 	if !opt.Delete {
-		log.Printf("[info] To delete expired %d image(s) on %s, run delete command", len(ids), repo)
+		log.Printf("[notice] To delete expired %d image(s) on %s, run delete command", len(ids), repo)
 		return nil
 	}
 	if !opt.Force {
@@ -122,7 +122,7 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Optio
 	}
 
 	for _, id := range ids {
-		log.Printf("[info] Deleting %s %s", repo, *id.ImageDigest)
+		log.Printf("[notice] Deleting %s %s", repo, *id.ImageDigest)
 	}
 	_, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
 		ImageIds:       ids,
@@ -172,7 +172,7 @@ func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdI
 					tagStr = "__UNTAGGED__"
 				}
 				log.Printf(
-					"[info] expired %s:%s %s pushd:%s",
+					"[notice] expired %s:%s %s %s",
 					*d.RepositoryName,
 					tagStr,
 					*d.ImageDigest,
@@ -268,7 +268,7 @@ func (app *App) availableTaskDefinitions(clusterArn string) ([]taskdef, error) {
 		for _, task := range tasks.Tasks {
 			td := strings.Split(*task.TaskDefinitionArn, "/")[1]
 			if _, found := taskDefs[td]; !found {
-				log.Printf("[info] Found taskDefinition %s in tasks", td)
+				log.Printf("[notice] Found taskDefinition %s in tasks", td)
 				taskDefs[td] = struct{}{}
 			}
 		}
@@ -295,7 +295,7 @@ func (app *App) availableTaskDefinitions(clusterArn string) ([]taskdef, error) {
 			for _, dp := range sv.Deployments {
 				td := strings.Split(*dp.TaskDefinition, "/")[1]
 				if _, found := taskDefs[td]; !found {
-					log.Printf("[info] Found taskDefinition %s in %s deployment on service %s", td, *dp.Status, *sv.ServiceName)
+					log.Printf("[notice] Found taskDefinition %s in %s deployment on service %s", td, *dp.Status, *sv.ServiceName)
 					taskDefs[td] = struct{}{}
 				}
 			}

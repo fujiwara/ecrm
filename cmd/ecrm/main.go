@@ -6,7 +6,9 @@ import (
 	"os"
 	"sort"
 
+	"github.com/fatih/color"
 	"github.com/fujiwara/ecrm"
+	"github.com/fujiwara/logutils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -63,6 +65,20 @@ func main() {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
+
+	var filter = &logutils.LevelFilter{
+		Levels: []logutils.LogLevel{"debug", "info", "notice", "warn", "error"},
+		ModifierFuncs: []logutils.ModifierFunc{
+			nil,
+			logutils.Color(color.FgWhite),
+			logutils.Color(color.FgHiBlue),
+			logutils.Color(color.FgYellow),
+			logutils.Color(color.FgRed, color.Bold),
+		},
+		MinLevel: logutils.LogLevel("debug"),
+		Writer:   os.Stderr,
+	}
+	log.SetOutput(filter)
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
