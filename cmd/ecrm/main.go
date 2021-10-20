@@ -12,6 +12,18 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var filter = &logutils.LevelFilter{
+	Levels: []logutils.LogLevel{"debug", "info", "notice", "warn", "error"},
+	ModifierFuncs: []logutils.ModifierFunc{
+		nil,
+		logutils.Color(color.FgWhite),
+		logutils.Color(color.FgHiBlue),
+		logutils.Color(color.FgYellow),
+		logutils.Color(color.FgRed, color.Bold),
+	},
+	Writer: os.Stderr,
+}
+
 func main() {
 	ecrmApp, err := ecrm.New(context.Background(), os.Getenv("AWS_REGION"))
 	if err != nil {
@@ -28,12 +40,19 @@ func main() {
 				Usage:       "Load configuration from `FILE`",
 				EnvVars:     []string{"ECRM_CONFIG"},
 			},
+			&cli.StringFlag{
+				Name:        "log-level",
+				DefaultText: "info",
+				Usage:       "Set log level (debug, info, notice, warn, error)",
+				EnvVars:     []string{"ECRM_LOG_LEVEL"},
+			},
 		},
 		Commands: []*cli.Command{
 			{
 				Name:  "scan",
 				Usage: "scan ECS clusters and find unused ECR images to delete safety.",
 				Action: func(c *cli.Context) error {
+					setLogLevel(c.String("log-level"))
 					return ecrmApp.Run(
 						c.String("config"),
 						ecrm.Option{Delete: false},
@@ -44,6 +63,7 @@ func main() {
 				Name:  "delete",
 				Usage: "scan ECS clusters and delete unused ECR images.",
 				Action: func(c *cli.Context) error {
+					setLogLevel(c.String("log-level"))
 					return ecrmApp.Run(
 						c.String("config"),
 						ecrm.Option{
@@ -66,21 +86,12 @@ func main() {
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 
-	var filter = &logutils.LevelFilter{
-		Levels: []logutils.LogLevel{"debug", "info", "notice", "warn", "error"},
-		ModifierFuncs: []logutils.ModifierFunc{
-			nil,
-			logutils.Color(color.FgWhite),
-			logutils.Color(color.FgHiBlue),
-			logutils.Color(color.FgYellow),
-			logutils.Color(color.FgRed, color.Bold),
-		},
-		MinLevel: logutils.LogLevel("debug"),
-		Writer:   os.Stderr,
-	}
-	log.SetOutput(filter)
-
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func setLogLevel(level string) {
+	filter.MinLevel = logutils.LogLevel(level)
+	log.SetOutput(filter)
 }

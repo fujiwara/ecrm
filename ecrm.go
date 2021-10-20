@@ -24,6 +24,8 @@ import (
 
 var DefaultExpires = time.Hour * 24 * 30 * 12 // 1 year
 
+var untaggedStr = "__UNTAGGED__"
+
 type App struct {
 	ctx    context.Context
 	ecr    *ecr.Client
@@ -197,53 +199,69 @@ func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdI
 		RepositoryName: &name,
 	})
 	ids := make([]types.ImageIdentifier, 0)
+	details := []types.ImageDetail{}
 	for p.HasMorePages() {
 		imgs, err := p.NextPage(app.ctx)
 		if err != nil {
 			return nil, sum, err
 		}
-		for _, d := range imgs.ImageDetails {
-			hold := false
-			sum.totalImages++
-			sum.totalImageSize += aws.ToInt64(d.ImageSizeInBytes)
-			for _, tag := range d.ImageTags {
-				if rc.MatchTag(tag) {
-					hold = true
-					break
-				}
-				imageArn := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag)
-				if holdImages[imageArn] != nil && !holdImages[imageArn].isEmpty() {
-					hold = true
-					break
-				}
+		details = append(details, imgs.ImageDetails...)
+	}
+	sort.SliceStable(details, func(i, j int) bool {
+		return details[i].ImagePushedAt.After(*details[j].ImagePushedAt)
+	})
+
+	var keepCount int64
+IMAGE:
+	for _, d := range details {
+		hold := false
+		sum.totalImages++
+		sum.totalImageSize += aws.ToInt64(d.ImageSizeInBytes)
+	TAG:
+		for _, tag := range d.ImageTags {
+			if rc.MatchTag(tag) {
+				hold = true
+				break TAG
 			}
-			if hold {
-				continue
-			}
-			at := *d.ImagePushedAt
-			if rc.IsExpired(at) {
-				var tagStr string
-				if len(d.ImageTags) > 1 {
-					tagStr = "{" + strings.Join(d.ImageTags, ",") + "}"
-				} else if len(d.ImageTags) == 1 {
-					tagStr = d.ImageTags[0]
-				} else {
-					tagStr = "__UNTAGGED__"
-				}
-				log.Printf(
-					"[notice] expired %s:%s %s %s",
-					*d.RepositoryName,
-					tagStr,
-					*d.ImageDigest,
-					at.Format(time.RFC3339),
-				)
-				ids = append(ids, types.ImageIdentifier{ImageDigest: d.ImageDigest})
-				sum.expiredImages++
-				sum.expiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
+			imageArn := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag)
+			if holdImages[imageArn] != nil && !holdImages[imageArn].isEmpty() {
+				hold = true
+				break TAG
 			}
 		}
+		if hold {
+			continue IMAGE
+		}
+		pushedAt := *d.ImagePushedAt
+		tag, tagged := imageTag(d)
+		displayName := name + ":" + tag
+		if !rc.IsExpired(pushedAt) {
+			log.Println("[info]", displayName, "is not expired")
+			continue IMAGE
+		}
+		if tagged {
+			keepCount++
+			if keepCount <= rc.KeepCount {
+				log.Printf("[info] %s is in keep_count %d <= %d", displayName, keepCount, rc.KeepCount)
+				continue IMAGE
+			}
+		}
+		log.Printf("[notice] %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
+		ids = append(ids, types.ImageIdentifier{ImageDigest: d.ImageDigest})
+		sum.expiredImages++
+		sum.expiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
 	}
 	return ids, sum, nil
+}
+
+func imageTag(d types.ImageDetail) (string, bool) {
+	if len(d.ImageTags) > 1 {
+		return "{" + strings.Join(d.ImageTags, ",") + "}", true
+	} else if len(d.ImageTags) == 1 {
+		return d.ImageTags[0], true
+	} else {
+		return untaggedStr, false
+	}
 }
 
 func (app *App) Scan(clusters []*ClusterConfig) (map[string]set, error) {

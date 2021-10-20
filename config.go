@@ -2,6 +2,7 @@ package ecrm
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -59,6 +60,7 @@ type RepositoryConfig struct {
 	Name            string   `yaml:"name"`
 	NamePattern     string   `yaml:"name_pattern"`
 	Expires         string   `yaml:"expires"`
+	KeepCount       int64    `yaml:"keep_count"`
 	KeepTagPatterns []string `yaml:"keep_tag_patterns"`
 
 	expireBefore time.Time
@@ -76,7 +78,7 @@ func (r *RepositoryConfig) Validate() error {
 			r.expireBefore = now.Add(-d)
 		}
 	} else {
-		r.expireBefore = now.Add(-DefaultExpires)
+		return fmt.Errorf("repository %s%s expires is required", r.Name, r.NamePattern)
 	}
 
 	return nil
