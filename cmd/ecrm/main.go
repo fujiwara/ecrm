@@ -55,8 +55,19 @@ func main() {
 					setLogLevel(c.String("log-level"))
 					return ecrmApp.Run(
 						c.String("config"),
-						ecrm.Option{Delete: false},
+						ecrm.Option{
+							Repository: c.String("repository"),
+						},
 					)
+				},
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:        "repository",
+						Aliases:     []string{"r"},
+						DefaultText: "",
+						Usage:       "scan only images in `REPOSITORY`",
+						EnvVars:     []string{"ECRM_REPOSITORY"},
+					},
 				},
 			},
 			{
@@ -67,8 +78,9 @@ func main() {
 					return ecrmApp.Run(
 						c.String("config"),
 						ecrm.Option{
-							Delete: true,
-							Force:  c.Bool("force"),
+							Delete:     true,
+							Force:      c.Bool("force"),
+							Repository: c.String("repository"),
 						},
 					)
 				},
@@ -77,6 +89,13 @@ func main() {
 						Name:    "force",
 						Usage:   "force delete images without confirmation",
 						EnvVars: []string{"ECRM_FORCE"},
+					},
+					&cli.StringFlag{
+						Name:        "repository",
+						Aliases:     []string{"r"},
+						DefaultText: "",
+						Usage:       "delete only images in `REPOSITORY`",
+						EnvVars:     []string{"ECRM_REPOSITORY"},
 					},
 				},
 			},

@@ -78,8 +78,9 @@ func (td taskdef) String() string {
 }
 
 type Option struct {
-	Delete bool
-	Force  bool
+	Delete     bool
+	Force      bool
+	Repository string
 }
 
 func New(ctx context.Context, region string) (*App, error) {
@@ -121,7 +122,11 @@ func (app *App) Run(path string, opt Option) error {
 	}
 
 	var sums summaries
-	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, &ecr.DescribeRepositoriesInput{})
+	in := &ecr.DescribeRepositoriesInput{}
+	if opt.Repository != "" {
+		in.RepositoryNames = []string{opt.Repository}
+	}
+	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, in)
 	for p.HasMorePages() {
 		repos, err := p.NextPage(app.ctx)
 		if err != nil {
@@ -164,11 +169,11 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Optio
 		return nil
 	}
 	if !opt.Delete {
-		log.Printf("[notice] Expired %d image(s) on %s exists, run delete command to delete", len(ids), repo)
+		log.Printf("[notice] Expired %d image(s) found on %s. Run delete command to delete them.", len(ids), repo)
 		return nil
 	}
 	if !opt.Force {
-		if !prompter.YN(fmt.Sprintf("Delete %d images on %s?", len(ids), repo), false) {
+		if !prompter.YN(fmt.Sprintf("Do you delete %d images on %s?", len(ids), repo), false) {
 			return errors.New("aborted")
 		}
 	}
@@ -183,7 +188,7 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Optio
 	if err != nil {
 		return err
 	}
-	log.Printf("[info] Deleted %s %d images", repo, len(ids))
+	log.Printf("[info] Deleted %d images on %s", len(ids), repo)
 	return nil
 }
 
