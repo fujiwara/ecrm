@@ -4,16 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Songmu/prompter"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/dustin/go-humanize"
+	"github.com/olekukonko/tablewriter"
 )
 
 var DefaultExpires = time.Hour * 24 * 30 * 12 // 1 year
@@ -23,6 +29,41 @@ type App struct {
 	ecr    *ecr.Client
 	ecs    *ecs.Client
 	region string
+}
+
+type summary struct {
+	repo             string
+	expiredImages    int64
+	totalImages      int64
+	expiredImageSize int64
+	totalImageSize   int64
+}
+
+func (s *summary) row() []string {
+	return []string{
+		s.repo,
+		fmt.Sprintf("%d (%s)", s.expiredImages, humanize.Bytes(uint64(s.expiredImageSize))),
+		fmt.Sprintf("%d (%s)", s.totalImages, humanize.Bytes(uint64(s.totalImageSize))),
+	}
+}
+
+type summaries []*summary
+
+func (s *summaries) print(w io.Writer) {
+	t := tablewriter.NewWriter(w)
+	t.SetHeader(s.header())
+	for _, s := range *s {
+		t.Append(s.row())
+	}
+	t.Render()
+}
+
+func (s *summaries) header() []string {
+	return []string{
+		"name",
+		"expired",
+		"total",
+	}
 }
 
 type taskdef struct {
@@ -77,6 +118,7 @@ func (app *App) Run(path string, opt Option) error {
 		return err
 	}
 
+	var sums summaries
 	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, &ecr.DescribeRepositoriesInput{})
 	for p.HasMorePages() {
 		repos, err := p.NextPage(app.ctx)
@@ -94,15 +136,23 @@ func (app *App) Run(path string, opt Option) error {
 				rc = r
 				break
 			}
-			ids, err := app.ImageIdentifiersToPurge(name, rc, images)
+			ids, sum, err := app.ImageIdentifiersToPurge(name, rc, images)
 			if err != nil {
 				return err
 			}
+			sums = append(sums, sum)
 			if err := app.DeleteImages(*repo.RepositoryName, ids, opt); err != nil {
 				return err
 			}
 		}
 	}
+	if opt.Delete {
+		return nil
+	}
+	sort.SliceStable(sums, func(i, j int) bool {
+		return sums[i].repo < sums[j].repo
+	})
+	sums.print(os.Stdout)
 	return nil
 }
 
@@ -112,7 +162,7 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Optio
 		return nil
 	}
 	if !opt.Delete {
-		log.Printf("[notice] To delete expired %d image(s) on %s, run delete command", len(ids), repo)
+		log.Printf("[notice] Expired %d image(s) on %s exists, run delete command to delete", len(ids), repo)
 		return nil
 	}
 	if !opt.Force {
@@ -135,7 +185,14 @@ func (app *App) DeleteImages(repo string, ids []types.ImageIdentifier, opt Optio
 	return nil
 }
 
-func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdImages map[string]set) ([]types.ImageIdentifier, error) {
+func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdImages map[string]set) ([]types.ImageIdentifier, *summary, error) {
+	sum := &summary{
+		repo:             name,
+		totalImages:      0,
+		expiredImages:    0,
+		totalImageSize:   0,
+		expiredImageSize: 0,
+	}
 	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
 		RepositoryName: &name,
 	})
@@ -143,10 +200,12 @@ func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdI
 	for p.HasMorePages() {
 		imgs, err := p.NextPage(app.ctx)
 		if err != nil {
-			return nil, err
+			return nil, sum, err
 		}
 		for _, d := range imgs.ImageDetails {
 			hold := false
+			sum.totalImages++
+			sum.totalImageSize += aws.ToInt64(d.ImageSizeInBytes)
 			for _, tag := range d.ImageTags {
 				if rc.MatchTag(tag) {
 					hold = true
@@ -179,10 +238,12 @@ func (app *App) ImageIdentifiersToPurge(name string, rc *RepositoryConfig, holdI
 					at.Format(time.RFC3339),
 				)
 				ids = append(ids, types.ImageIdentifier{ImageDigest: d.ImageDigest})
+				sum.expiredImages++
+				sum.expiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
 			}
 		}
 	}
-	return ids, nil
+	return ids, sum, nil
 }
 
 func (app *App) Scan(clusters []*ClusterConfig) (map[string]set, error) {
