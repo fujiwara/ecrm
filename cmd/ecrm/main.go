@@ -49,8 +49,8 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:  "scan",
-				Usage: "scan ECS clusters and find unused ECR images to delete safety.",
+				Name:  "plan",
+				Usage: "scan ECS resources and find unused ECR images to delete safety.",
 				Action: func(c *cli.Context) error {
 					setLogLevel(c.String("log-level"))
 					return ecrmApp.Run(
@@ -65,14 +65,14 @@ func main() {
 						Name:        "repository",
 						Aliases:     []string{"r"},
 						DefaultText: "",
-						Usage:       "scan only images in `REPOSITORY`",
+						Usage:       "plan for only images in `REPOSITORY`",
 						EnvVars:     []string{"ECRM_REPOSITORY"},
 					},
 				},
 			},
 			{
 				Name:  "delete",
-				Usage: "scan ECS clusters and delete unused ECR images.",
+				Usage: "scan ECS resources and delete unused ECR images.",
 				Action: func(c *cli.Context) error {
 					setLogLevel(c.String("log-level"))
 					return ecrmApp.Run(
@@ -111,6 +111,8 @@ func main() {
 }
 
 func setLogLevel(level string) {
-	filter.MinLevel = logutils.LogLevel(level)
+	if level == "" {
+		filter.MinLevel = logutils.LogLevel(level)
+	}
 	log.SetOutput(filter)
 }

@@ -5,28 +5,32 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/fujiwara/ecrm/wildcard"
 	"github.com/goccy/go-yaml"
 	"github.com/k1LoW/duration"
 )
 
 type Config struct {
-	Clusters     []*ClusterConfig    `yaml:"clusters"`
-	Repositories []*RepositoryConfig `yaml:"repositories"`
+	Clusters        []*ClusterConfig    `yaml:"clusters"`
+	TaskDefinitions []*TaskdefConfig    `yaml:"task_definitions"`
+	Repositories    []*RepositoryConfig `yaml:"repositories"`
 }
 
 func (c *Config) Validate() error {
-	for _, cluster := range c.Clusters {
-		if err := cluster.Validate(); err != nil {
+	for _, cc := range c.Clusters {
+		if err := cc.Validate(); err != nil {
 			return err
 		}
 	}
-	for _, repository := range c.Repositories {
-		if err := repository.Validate(); err != nil {
+	for _, tc := range c.TaskDefinitions {
+		if err := tc.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, rc := range c.Repositories {
+		if err := rc.Validate(); err != nil {
 			return err
 		}
 	}
@@ -46,10 +50,7 @@ func (c *ClusterConfig) Validate() error {
 }
 
 func (c *ClusterConfig) Match(name string) bool {
-	if arn.IsARN(name) {
-		a, _ := arn.Parse(name)
-		name = strings.Replace(a.Resource, "cluster/", "", 1)
-	}
+	name = clusterArnToName(name)
 	if c.Name == name {
 		return true
 	}
@@ -121,4 +122,24 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+type TaskdefConfig struct {
+	Name        string `yaml:"name"`
+	NamePattern string `yaml:"name_pattern"`
+	KeepCount   int64  `yaml:"keep_count"`
+}
+
+func (c *TaskdefConfig) Validate() error {
+	if c.KeepCount == 0 {
+		c.KeepCount = 1
+	}
+	return nil
+}
+
+func (c *TaskdefConfig) Match(name string) bool {
+	if c.Name == name {
+		return true
+	}
+	return wildcard.Match(c.NamePattern, name)
 }

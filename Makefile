@@ -8,3 +8,6 @@ clean:
 
 test:
 	go test -v ./...
+
+install:
+	go install github.com/fujiwara/ecrm/cmd/ecrm
