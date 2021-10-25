@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"sort"
@@ -22,8 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 
 	"github.com/Songmu/prompter"
-	"github.com/dustin/go-humanize"
-	"github.com/olekukonko/tablewriter"
 )
 
 var untaggedStr = "__UNTAGGED__"
@@ -34,48 +31,6 @@ type App struct {
 	ecs    *ecs.Client
 	lambda *lambda.Client
 	region string
-}
-
-type summary struct {
-	repo             string
-	expiredImages    int64
-	totalImages      int64
-	expiredImageSize int64
-	totalImageSize   int64
-}
-
-func (s *summary) row() []string {
-	return []string{
-		s.repo,
-		fmt.Sprintf("%d (%s)", s.expiredImages, humanize.Bytes(uint64(s.expiredImageSize))),
-		fmt.Sprintf("%d (%s)", s.totalImages, humanize.Bytes(uint64(s.totalImageSize))),
-	}
-}
-
-type summaries []*summary
-
-func (s *summaries) print(w io.Writer) {
-	t := tablewriter.NewWriter(w)
-	t.SetHeader(s.header())
-	t.SetBorder(false)
-	for _, s := range *s {
-		row := s.row()
-		if row[1] == "0 (0 B)" {
-			row[1] = ""
-			t.Append(row)
-		} else {
-			t.Rich(row, []tablewriter.Colors{{}, {tablewriter.FgBlueColor}, {}})
-		}
-	}
-	t.Render()
-}
-
-func (s *summaries) header() []string {
-	return []string{
-		"repository",
-		"expired",
-		"total",
-	}
 }
 
 type taskdef struct {
