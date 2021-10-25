@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Songmu/prompter"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
@@ -20,6 +19,9 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+
+	"github.com/Songmu/prompter"
 	"github.com/dustin/go-humanize"
 	"github.com/olekukonko/tablewriter"
 )
@@ -30,6 +32,7 @@ type App struct {
 	ctx    context.Context
 	ecr    *ecr.Client
 	ecs    *ecs.Client
+	lambda *lambda.Client
 	region string
 }
 
@@ -101,6 +104,7 @@ func New(ctx context.Context, region string) (*App, error) {
 		ctx:    ctx,
 		ecr:    ecr.NewFromConfig(cfg),
 		ecs:    ecs.NewFromConfig(cfg),
+		lambda: lambda.NewFromConfig(cfg),
 	}, nil
 }
 
@@ -153,6 +157,10 @@ func (app *App) Run(path string, opt Option) error {
 		return err
 	}
 
+	if err := app.scanLambdaFunctions(c.LambdaFunctions, images); err != nil {
+		return err
+	}
+
 	idsMaps, err := app.scanRepositories(c.Repositories, images, opt)
 	if err != nil {
 		return err
@@ -183,7 +191,7 @@ func (app *App) aggregateECRImages(taskdefs []taskdef) (map[string]set, error) {
 			return nil, err
 		}
 		for _, img := range imgs {
-			log.Printf("[info] %s is in use by %s", img, td.String())
+			log.Printf("[info] %s is in use by task definition %s", img, td.String())
 			if images[img] == nil {
 				images[img] = newSet()
 			}

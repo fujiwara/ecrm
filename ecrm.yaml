@@ -1,0 +1,13 @@
+clusters:
+  - name_pattern: "*"
+lambda_functions:
+  - name_pattern: "*"
+    keep_count: 3
+task_definitions:
+  - name_pattern: "*"
+    keep_count: 3
+repositories:
+  - name_pattern: "*"
+    expires: 30 days
+    keep_tag_patterns:
+      - latest
