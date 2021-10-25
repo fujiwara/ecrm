@@ -111,8 +111,9 @@ func main() {
 }
 
 func setLogLevel(level string) {
-	if level == "" {
+	if level != "" {
 		filter.MinLevel = logutils.LogLevel(level)
 	}
 	log.SetOutput(filter)
+	log.Println("[debug] Setting log level to", level)
 }
