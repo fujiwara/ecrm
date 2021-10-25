@@ -8,6 +8,8 @@ ecrm can delete "unused" images safety.
 
 - Images not specified in running tasks in ECS clusters.
 - Images not specified in avaliable ECS service deployments.
+- Images not specified in exists ECS task definitions.
+- Images not specified in using Lambda functions (PackageType=Image).
 
 ## Usage
 
@@ -19,12 +21,13 @@ USAGE:
    ecrm [global options] command [command options] [arguments...]
 
 COMMANDS:
-   delete   scan ECS clusters and delete unused ECR images.
-   scan     scan ECS clusters and find unused ECR images to delete safety.
+   delete   scan ECS resources and delete unused ECR images.
+   plan     scan ECS resources and find unused ECR images to delete safety.
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
    --config FILE, -c FILE  Load configuration from FILE (default: ecrm.yaml) [$ECRM_CONFIG]
+   --log-level value       Set log level (debug, info, notice, warn, error) (default: info) [$ECRM_LOG_LEVEL]
    --help, -h              show help (default: false)
 ```
 
@@ -36,6 +39,12 @@ Configuration file is YAML format.
 clusters:
   - name: my-cluster
   - name_pattern: "prod*"
+task_definitions:
+  - name: "*"
+    keep_count: 3
+lambda_funcions:
+  - name: "*"
+    keep_count: 3
 repositories:
   - name_pattern: "prod/*"
     expires: 90days
@@ -45,18 +54,19 @@ repositories:
     expires: 30days
 ```
 
-### scan command
+### plan command
 
 ```console
-$ ecrm scan --help
+$ ecrm plan --help
 NAME:
-   ecrm scan - scan ECS clusters and find unused ECR images to delete safety.
+   ecrm plan - scan ECS resources and find unused ECR images to delete safety.
 
 USAGE:
-   ecrm scan [command options] [arguments...]
+   ecrm plan [command options] [arguments...]
 
 OPTIONS:
-   --help, -h  show help (default: false)
+   --repository REPOSITORY, -r REPOSITORY  plan for only images in REPOSITORY [$ECRM_REPOSITORY]
+   --help, -h                              show help (default: false)
 ```
 
 ### delete command
@@ -64,14 +74,15 @@ OPTIONS:
 ```console
 $ ecrm delete --help
 NAME:
-   ecrm delete - scan ECS clusters and delete unused ECR images.
+   ecrm delete - scan ECS resources and delete unused ECR images.
 
 USAGE:
    ecrm delete [command options] [arguments...]
 
 OPTIONS:
-   --force     force delete images without confirmation (default: false) [$ECRM_FORCE]
-   --help, -h  show help (default: false)
+   --force                                 force delete images without confirmation (default: false) [$ECRM_FORCE]
+   --repository REPOSITORY, -r REPOSITORY  delete only images in REPOSITORY [$ECRM_REPOSITORY]
+   --help, -h                              show help (default: false)
 ```
 
 ## Author
