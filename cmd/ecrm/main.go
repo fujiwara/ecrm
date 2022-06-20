@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/fatih/color"
 	"github.com/fujiwara/ecrm"
 	"github.com/fujiwara/logutils"
@@ -105,6 +107,24 @@ func main() {
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 
+	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
+		app.Action = func(c *cli.Context) error {
+			setLogLevel(c.String("log-level"))
+			subcommand := os.Getenv("ECRM_COMMAND")
+			lambda.Start(func() error {
+				return ecrmApp.Run(
+					c.String("config"),
+					ecrm.Option{
+						Delete:     subcommand == "delete",
+						Force:      subcommand == "delete", //If it works as bootstrap for a Lambda function, delete images without confirmation.
+						Repository: os.Getenv("ECRM_REPOSITORY"),
+					},
+				)
+			})
+			return nil
+		}
+	}
+
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
@@ -116,4 +136,11 @@ func setLogLevel(level string) {
 	}
 	log.SetOutput(filter)
 	log.Println("[debug] Setting log level to", level)
+}
+
+func isLambda() bool {
+	if strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
+		return true
+	}
+	return false
 }
