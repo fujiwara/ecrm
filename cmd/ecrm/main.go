@@ -36,17 +36,17 @@ func main() {
 		Usage: "A command line tool for managing ECR repositories",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "config",
-				Aliases:     []string{"c"},
-				DefaultText: "ecrm.yaml",
-				Usage:       "Load configuration from `FILE`",
-				EnvVars:     []string{"ECRM_CONFIG"},
+				Name:    "config",
+				Aliases: []string{"c"},
+				Value:   "ecrm.yaml",
+				Usage:   "Load configuration from `FILE`",
+				EnvVars: []string{"ECRM_CONFIG"},
 			},
 			&cli.StringFlag{
-				Name:        "log-level",
-				DefaultText: "info",
-				Usage:       "Set log level (debug, info, notice, warn, error)",
-				EnvVars:     []string{"ECRM_LOG_LEVEL"},
+				Name:    "log-level",
+				Value:   "info",
+				Usage:   "Set log level (debug, info, notice, warn, error)",
+				EnvVars: []string{"ECRM_LOG_LEVEL"},
 			},
 		},
 		Commands: []*cli.Command{
