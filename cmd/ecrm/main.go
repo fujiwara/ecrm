@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/fatih/color"
 	"github.com/fujiwara/ecrm"
 	"github.com/fujiwara/logutils"
@@ -34,17 +36,17 @@ func main() {
 		Usage: "A command line tool for managing ECR repositories",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "config",
-				Aliases:     []string{"c"},
-				DefaultText: "ecrm.yaml",
-				Usage:       "Load configuration from `FILE`",
-				EnvVars:     []string{"ECRM_CONFIG"},
+				Name:    "config",
+				Aliases: []string{"c"},
+				Value:   "ecrm.yaml",
+				Usage:   "Load configuration from `FILE`",
+				EnvVars: []string{"ECRM_CONFIG"},
 			},
 			&cli.StringFlag{
-				Name:        "log-level",
-				DefaultText: "info",
-				Usage:       "Set log level (debug, info, notice, warn, error)",
-				EnvVars:     []string{"ECRM_LOG_LEVEL"},
+				Name:    "log-level",
+				Value:   "info",
+				Usage:   "Set log level (debug, info, notice, warn, error)",
+				EnvVars: []string{"ECRM_LOG_LEVEL"},
 			},
 		},
 		Commands: []*cli.Command{
@@ -105,6 +107,24 @@ func main() {
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 
+	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
+		app.Action = func(c *cli.Context) error {
+			setLogLevel(c.String("log-level"))
+			subcommand := os.Getenv("ECRM_COMMAND")
+			lambda.Start(func() error {
+				return ecrmApp.Run(
+					c.String("config"),
+					ecrm.Option{
+						Delete:     subcommand == "delete",
+						Force:      subcommand == "delete", //If it works as bootstrap for a Lambda function, delete images without confirmation.
+						Repository: os.Getenv("ECRM_REPOSITORY"),
+					},
+				)
+			})
+			return nil
+		}
+	}
+
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
@@ -116,4 +136,11 @@ func setLogLevel(level string) {
 	}
 	log.SetOutput(filter)
 	log.Println("[debug] Setting log level to", level)
+}
+
+func isLambda() bool {
+	if strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
+		return true
+	}
+	return false
 }
