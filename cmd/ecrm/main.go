@@ -11,6 +11,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/fujiwara/ecrm"
 	"github.com/fujiwara/logutils"
+	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
 
@@ -48,6 +49,16 @@ func main() {
 				Usage:   "Set log level (debug, info, notice, warn, error)",
 				EnvVars: []string{"ECRM_LOG_LEVEL"},
 			},
+			&cli.BoolFlag{
+				Name:    "no-color",
+				Value:   !isatty.IsTerminal(os.Stdout.Fd()),
+				Usage:   "Whether or not to color the output",
+				EnvVars: []string{"ECRM_NO_COLOR"},
+			},
+		},
+		Before: func(c *cli.Context) error {
+			color.NoColor = c.Bool("no-color")
+			return nil
 		},
 		Commands: []*cli.Command{
 			{
@@ -59,6 +70,7 @@ func main() {
 						c.String("config"),
 						ecrm.Option{
 							Repository: c.String("repository"),
+							NoColor:    c.Bool("no-color"),
 						},
 					)
 				},
@@ -83,6 +95,7 @@ func main() {
 							Delete:     true,
 							Force:      c.Bool("force"),
 							Repository: c.String("repository"),
+							NoColor:    c.Bool("no-color"),
 						},
 					)
 				},
@@ -118,6 +131,7 @@ func main() {
 						Delete:     subcommand == "delete",
 						Force:      subcommand == "delete", //If it works as bootstrap for a Lambda function, delete images without confirmation.
 						Repository: os.Getenv("ECRM_REPOSITORY"),
+						NoColor:    c.Bool("no-color"),
 					},
 				)
 			})

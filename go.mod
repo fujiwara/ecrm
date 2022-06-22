@@ -16,6 +16,7 @@ require (
 	github.com/goccy/go-yaml v1.9.4
 	github.com/k1LoW/duration v1.1.0
 	github.com/mattn/go-colorable v0.1.11 // indirect
+	github.com/mattn/go-isatty v0.0.14
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/urfave/cli/v2 v2.3.0
 	golang.org/x/sys v0.0.0-20211015200801-69063c4bb744 // indirect
