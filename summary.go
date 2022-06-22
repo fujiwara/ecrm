@@ -28,7 +28,7 @@ func (s *summary) row() []string {
 
 type summaries []*summary
 
-func (s *summaries) print(w io.Writer) {
+func (s *summaries) print(w io.Writer, noColor bool) {
 	t := tablewriter.NewWriter(w)
 	t.SetHeader(s.header())
 	t.SetBorder(false)
@@ -43,7 +43,11 @@ func (s *summaries) print(w io.Writer) {
 		if strings.HasPrefix(row[3], "0 ") {
 			colors[3] = tablewriter.Colors{tablewriter.FgYellowColor}
 		}
-		t.Rich(row, colors)
+		if noColor {
+			t.Append(row)
+		} else {
+			t.Rich(row, colors)
+		}
 	}
 	t.Render()
 }

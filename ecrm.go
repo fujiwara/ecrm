@@ -46,6 +46,7 @@ type Option struct {
 	Delete     bool
 	Force      bool
 	Repository string
+	NoColor    bool
 }
 
 func New(ctx context.Context, region string) (*App, error) {
@@ -193,7 +194,7 @@ func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set,
 	sort.SliceStable(sums, func(i, j int) bool {
 		return sums[i].repo < sums[j].repo
 	})
-	sums.print(os.Stdout)
+	sums.print(os.Stdout, opt.NoColor)
 	return idsMaps, nil
 }
 
