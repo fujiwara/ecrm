@@ -9,8 +9,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/Songmu/prompter"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
@@ -19,8 +21,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-
-	"github.com/Songmu/prompter"
+	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 )
 
 var untaggedStr = "__UNTAGGED__"
@@ -198,6 +200,8 @@ func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set,
 	return idsMaps, nil
 }
 
+const batchDeleteImageIdsLimit = 100
+
 func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Option) error {
 	if len(ids) == 0 {
 		log.Println("[info] no need to delete images on", repo)
@@ -216,15 +220,27 @@ func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Op
 	for _, id := range ids {
 		log.Printf("[notice] Deleting %s %s", repo, *id.ImageDigest)
 	}
-	_, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
-		ImageIds:       ids,
-		RepositoryName: &repo,
-	})
-	if err != nil {
-		return err
+	chunkIDs := lo.Chunk(ids, batchDeleteImageIdsLimit)
+	eg, egctx := errgroup.WithContext(app.ctx)
+	eg.SetLimit(10)
+	var deletedCount int32
+	for _, ids := range chunkIDs {
+		input := &ecr.BatchDeleteImageInput{
+			ImageIds:       ids,
+			RepositoryName: &repo,
+		}
+		eg.Go(func() error {
+			output, err := app.ecr.BatchDeleteImage(egctx, input)
+			if err != nil {
+				return err
+			}
+			atomic.AddInt32(&deletedCount, int32(len(output.ImageIds)))
+			return nil
+		})
 	}
-	log.Printf("[info] Deleted %d images on %s", len(ids), repo)
-	return nil
+	err := eg.Wait()
+	log.Printf("[info] Deleted %d images on %s", deletedCount, repo)
+	return err
 }
 
 func (app *App) unusedImageIdentifiers(name string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
