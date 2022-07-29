@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/Songmu/prompter"
@@ -22,7 +21,6 @@ import (
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
 )
 
 var untaggedStr = "__UNTAGGED__"
@@ -221,26 +219,21 @@ func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Op
 		log.Printf("[notice] Deleting %s %s", repo, *id.ImageDigest)
 	}
 	chunkIDs := lo.Chunk(ids, batchDeleteImageIdsLimit)
-	eg, egctx := errgroup.WithContext(app.ctx)
-	eg.SetLimit(10)
-	var deletedCount int32
+	var deletedCount int
+	defer func() {
+		log.Printf("[info] Deleted %d images on %s", deletedCount, repo)
+	}()
 	for _, ids := range chunkIDs {
-		input := &ecr.BatchDeleteImageInput{
+		output, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
 			ImageIds:       ids,
 			RepositoryName: &repo,
-		}
-		eg.Go(func() error {
-			output, err := app.ecr.BatchDeleteImage(egctx, input)
-			if err != nil {
-				return err
-			}
-			atomic.AddInt32(&deletedCount, int32(len(output.ImageIds)))
-			return nil
 		})
+		if err != nil {
+			return err
+		}
+		deletedCount += len(output.ImageIds)
 	}
-	err := eg.Wait()
-	log.Printf("[info] Deleted %d images on %s", deletedCount, repo)
-	return err
+	return nil
 }
 
 func (app *App) unusedImageIdentifiers(name string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
