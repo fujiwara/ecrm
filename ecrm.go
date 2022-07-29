@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Songmu/prompter"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
@@ -19,8 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-
-	"github.com/Songmu/prompter"
+	"github.com/samber/lo"
 )
 
 var untaggedStr = "__UNTAGGED__"
@@ -198,6 +198,8 @@ func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set,
 	return idsMaps, nil
 }
 
+const batchDeleteImageIdsLimit = 100
+
 func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Option) error {
 	if len(ids) == 0 {
 		log.Println("[info] no need to delete images on", repo)
@@ -216,14 +218,21 @@ func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Op
 	for _, id := range ids {
 		log.Printf("[notice] Deleting %s %s", repo, *id.ImageDigest)
 	}
-	_, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
-		ImageIds:       ids,
-		RepositoryName: &repo,
-	})
-	if err != nil {
-		return err
+	chunkIDs := lo.Chunk(ids, batchDeleteImageIdsLimit)
+	var deletedCount int
+	defer func() {
+		log.Printf("[info] Deleted %d images on %s", deletedCount, repo)
+	}()
+	for _, ids := range chunkIDs {
+		output, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
+			ImageIds:       ids,
+			RepositoryName: &repo,
+		})
+		if err != nil {
+			return err
+		}
+		deletedCount += len(output.ImageIds)
 	}
-	log.Printf("[info] Deleted %d images on %s", len(ids), repo)
 	return nil
 }
 
