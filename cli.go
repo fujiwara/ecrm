@@ -124,6 +124,7 @@ func (app *App) NewCLI() *cli.App {
 		Commands: []*cli.Command{
 			app.NewPlanCommand(),
 			app.NewDeleteCommand(),
+			app.NewGenerateCommand(),
 		},
 	}
 	sort.Sort(cli.FlagsByName(cliApp.Flags))
