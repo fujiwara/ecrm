@@ -1,13 +1,17 @@
 package ecrm
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/Songmu/prompter"
 	"github.com/goccy/go-yaml"
 	"github.com/urfave/cli/v2"
 )
@@ -37,7 +41,23 @@ func (app *App) GenerateConfig(ctx context.Context, configFile string, opt Optio
 		return err
 	}
 
-	return yaml.NewEncoder(os.Stdout, yaml.IndentSequence(true)).Encode(config)
+	buf := bytes.NewBuffer(nil)
+	if err := yaml.NewEncoder(buf, yaml.IndentSequence(true)).Encode(config); err != nil {
+		return err
+	}
+	log.Println("[notice] Generated config:")
+	os.Stderr.Write(buf.Bytes())
+
+	if _, err := os.Stat(configFile); err == nil {
+		if !prompter.YN(fmt.Sprintf("%s file already exists. Overwrite?", configFile), false) {
+			return errors.New("aborted")
+		}
+	}
+	if err := os.WriteFile(configFile, buf.Bytes(), 0644); err != nil {
+		return err
+	}
+	log.Println("[notice] Saved", configFile)
+	return nil
 }
 
 func (app *App) generateClusterConfig(ctx context.Context, config *Config) error {
