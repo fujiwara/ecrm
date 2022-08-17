@@ -35,7 +35,7 @@ func SetLogLevel(level string) {
 func (app *App) NewPlanCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "plan",
-		Usage: "scan ECS resources and find unused ECR images to delete safety.",
+		Usage: "Scan ECS/Lambda resources and find unused ECR images to delete safety.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "repository",
@@ -61,7 +61,7 @@ func (app *App) NewPlanCommand() *cli.Command {
 func (app *App) NewDeleteCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "delete",
-		Usage: "scan ECS resources and delete unused ECR images.",
+		Usage: "Scan ECS/Lambda resources and delete unused ECR images.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",
