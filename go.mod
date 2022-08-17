@@ -19,7 +19,6 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/samber/lo v1.26.0
 	github.com/urfave/cli/v2 v2.3.0
-	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 )
 
 require (
