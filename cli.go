@@ -47,6 +47,7 @@ func (app *App) NewPlanCommand() *cli.Command {
 		},
 		Action: func(c *cli.Context) error {
 			return app.Run(
+				c.Context,
 				c.String("config"),
 				Option{
 					Repository: c.String("repository"),
@@ -77,6 +78,7 @@ func (app *App) NewDeleteCommand() *cli.Command {
 		},
 		Action: func(c *cli.Context) error {
 			return app.Run(
+				c.Context,
 				c.String("config"),
 				Option{
 					Delete:     true,
@@ -134,6 +136,7 @@ func (app *App) NewLambdaAction() func(c *cli.Context) error {
 		subcommand := os.Getenv("ECRM_COMMAND")
 		lambda.Start(func() error {
 			return app.Run(
+				c.Context,
 				c.String("config"),
 				Option{
 					Delete:     subcommand == "delete",

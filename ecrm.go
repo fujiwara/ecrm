@@ -26,7 +26,6 @@ import (
 var untaggedStr = "__UNTAGGED__"
 
 type App struct {
-	ctx    context.Context
 	ecr    *ecr.Client
 	ecs    *ecs.Client
 	lambda *lambda.Client
@@ -57,18 +56,17 @@ func New(ctx context.Context, region string) (*App, error) {
 
 	return &App{
 		region: cfg.Region,
-		ctx:    ctx,
 		ecr:    ecr.NewFromConfig(cfg),
 		ecs:    ecs.NewFromConfig(cfg),
 		lambda: lambda.NewFromConfig(cfg),
 	}, nil
 }
 
-func (app *App) clusterArns() ([]string, error) {
+func (app *App) clusterArns(ctx context.Context) ([]string, error) {
 	clusters := make([]string, 0)
 	p := ecs.NewListClustersPaginator(app.ecs, &ecs.ListClustersInput{})
 	for p.HasMorePages() {
-		co, err := p.NextPage(app.ctx)
+		co, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -77,11 +75,11 @@ func (app *App) clusterArns() ([]string, error) {
 	return clusters, nil
 }
 
-func (app *App) taskDefinitionFamilies() ([]string, error) {
+func (app *App) taskDefinitionFamilies(ctx context.Context) ([]string, error) {
 	tds := make([]string, 0)
 	p := ecs.NewListTaskDefinitionFamiliesPaginator(app.ecs, &ecs.ListTaskDefinitionFamiliesInput{})
 	for p.HasMorePages() {
-		td, err := p.NextPage(app.ctx)
+		td, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -91,33 +89,33 @@ func (app *App) taskDefinitionFamilies() ([]string, error) {
 	return tds, nil
 }
 
-func (app *App) Run(path string, opt Option) error {
+func (app *App) Run(ctx context.Context, path string, opt Option) error {
 	c, err := LoadConfig(path)
 	if err != nil {
 		return err
 	}
 
 	var taskdefs []taskdef
-	if tds, err := app.scanClusters(c.Clusters); err != nil {
+	if tds, err := app.scanClusters(ctx, c.Clusters); err != nil {
 		return err
 	} else {
 		taskdefs = append(taskdefs, tds...)
 	}
-	if tds, err := app.scanTaskdefs(c.TaskDefinitions); err != nil {
+	if tds, err := app.scanTaskdefs(ctx, c.TaskDefinitions); err != nil {
 		return err
 	} else {
 		taskdefs = append(taskdefs, tds...)
 	}
-	images, err := app.aggregateECRImages(taskdefs)
+	images, err := app.aggregateECRImages(ctx, taskdefs)
 	if err != nil {
 		return err
 	}
 
-	if err := app.scanLambdaFunctions(c.LambdaFunctions, images); err != nil {
+	if err := app.scanLambdaFunctions(ctx, c.LambdaFunctions, images); err != nil {
 		return err
 	}
 
-	idsMaps, err := app.scanRepositories(c.Repositories, images, opt)
+	idsMaps, err := app.scanRepositories(ctx, c.Repositories, images, opt)
 	if err != nil {
 		return err
 	}
@@ -125,7 +123,7 @@ func (app *App) Run(path string, opt Option) error {
 		return nil
 	}
 	for name, ids := range idsMaps {
-		if err := app.DeleteImages(name, ids, opt); err != nil {
+		if err := app.DeleteImages(ctx, name, ids, opt); err != nil {
 			return err
 		}
 	}
@@ -133,7 +131,7 @@ func (app *App) Run(path string, opt Option) error {
 	return nil
 }
 
-func (app *App) aggregateECRImages(taskdefs []taskdef) (map[string]set, error) {
+func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (map[string]set, error) {
 	images := make(map[string]set)
 	dup := make(map[string]struct{})
 	for _, td := range taskdefs {
@@ -142,7 +140,7 @@ func (app *App) aggregateECRImages(taskdefs []taskdef) (map[string]set, error) {
 		}
 		dup[td.String()] = struct{}{}
 
-		imgs, err := app.extractECRImages(td.String())
+		imgs, err := app.extractECRImages(ctx, td.String())
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +155,7 @@ func (app *App) aggregateECRImages(taskdefs []taskdef) (map[string]set, error) {
 	return images, nil
 }
 
-func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set, opt Option) (map[string][]ecrTypes.ImageIdentifier, error) {
+func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, images map[string]set, opt Option) (map[string][]ecrTypes.ImageIdentifier, error) {
 	idsMaps := make(map[string][]ecrTypes.ImageIdentifier)
 	var sums summaries
 	in := &ecr.DescribeRepositoriesInput{}
@@ -166,7 +164,7 @@ func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set,
 	}
 	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, in)
 	for p.HasMorePages() {
-		repos, err := p.NextPage(app.ctx)
+		repos, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +181,7 @@ func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set,
 			if rc == nil {
 				continue REPO
 			}
-			ids, sum, err := app.unusedImageIdentifiers(name, rc, images)
+			ids, sum, err := app.unusedImageIdentifiers(ctx, name, rc, images)
 			if err != nil {
 				return nil, err
 			}
@@ -200,7 +198,7 @@ func (app *App) scanRepositories(rcs []*RepositoryConfig, images map[string]set,
 
 const batchDeleteImageIdsLimit = 100
 
-func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Option) error {
+func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.ImageIdentifier, opt Option) error {
 	if len(ids) == 0 {
 		log.Println("[info] no need to delete images on", repo)
 		return nil
@@ -224,7 +222,7 @@ func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Op
 		log.Printf("[info] Deleted %d images on %s", deletedCount, repo)
 	}()
 	for _, ids := range chunkIDs {
-		output, err := app.ecr.BatchDeleteImage(app.ctx, &ecr.BatchDeleteImageInput{
+		output, err := app.ecr.BatchDeleteImage(ctx, &ecr.BatchDeleteImageInput{
 			ImageIds:       ids,
 			RepositoryName: &repo,
 		})
@@ -236,7 +234,7 @@ func (app *App) DeleteImages(repo string, ids []ecrTypes.ImageIdentifier, opt Op
 	return nil
 }
 
-func (app *App) unusedImageIdentifiers(name string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
+func (app *App) unusedImageIdentifiers(ctx context.Context, name string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
 	sum := &summary{
 		repo:             name,
 		totalImages:      0,
@@ -250,7 +248,7 @@ func (app *App) unusedImageIdentifiers(name string, rc *RepositoryConfig, holdIm
 	ids := make([]ecrTypes.ImageIdentifier, 0)
 	details := []ecrTypes.ImageDetail{}
 	for p.HasMorePages() {
-		imgs, err := p.NextPage(app.ctx)
+		imgs, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, sum, err
 		}
@@ -313,9 +311,9 @@ func imageTag(d ecrTypes.ImageDetail) (string, bool) {
 	}
 }
 
-func (app *App) scanClusters(clustersConfigs []*ClusterConfig) ([]taskdef, error) {
+func (app *App) scanClusters(ctx context.Context, clustersConfigs []*ClusterConfig) ([]taskdef, error) {
 	tds := make([]taskdef, 0)
-	clusterArns, err := app.clusterArns()
+	clusterArns, err := app.clusterArns(ctx)
 	if err != nil {
 		return tds, err
 	}
@@ -333,7 +331,7 @@ func (app *App) scanClusters(clustersConfigs []*ClusterConfig) ([]taskdef, error
 		}
 
 		log.Printf("[debug] Checking cluster %s", clusterArn)
-		_tds, err := app.availableTaskDefinitionsInCluster(clusterArn)
+		_tds, err := app.availableTaskDefinitionsInCluster(ctx, clusterArn)
 		if err != nil {
 			return tds, err
 		}
@@ -342,9 +340,9 @@ func (app *App) scanClusters(clustersConfigs []*ClusterConfig) ([]taskdef, error
 	return tds, nil
 }
 
-func (app *App) scanTaskdefs(tcs []*TaskdefConfig) ([]taskdef, error) {
+func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskdef, error) {
 	tds := make([]taskdef, 0)
-	famiries, err := app.taskDefinitionFamilies()
+	famiries, err := app.taskDefinitionFamilies(ctx)
 	if err != nil {
 		return tds, err
 	}
@@ -363,7 +361,7 @@ func (app *App) scanTaskdefs(tcs []*TaskdefConfig) ([]taskdef, error) {
 			continue
 		}
 		log.Printf("[debug] Checking task definitions %s latest %d revisions", name, keepCount)
-		res, err := app.ecs.ListTaskDefinitions(app.ctx, &ecs.ListTaskDefinitionsInput{
+		res, err := app.ecs.ListTaskDefinitions(ctx, &ecs.ListTaskDefinitionsInput{
 			FamilyPrefix: &name,
 			MaxResults:   aws.Int32(int32(keepCount)),
 			Sort:         ecsTypes.SortOrderDesc,
@@ -385,9 +383,9 @@ func (app *App) scanTaskdefs(tcs []*TaskdefConfig) ([]taskdef, error) {
 	return tds, nil
 }
 
-func (app App) extractECRImages(tdName string) ([]string, error) {
+func (app App) extractECRImages(ctx context.Context, tdName string) ([]string, error) {
 	images := make([]string, 0)
-	out, err := app.ecs.DescribeTaskDefinition(app.ctx, &ecs.DescribeTaskDefinitionInput{
+	out, err := app.ecs.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: &tdName,
 	})
 	if err != nil {
@@ -404,20 +402,20 @@ func (app App) extractECRImages(tdName string) ([]string, error) {
 	return images, nil
 }
 
-func (app *App) availableTaskDefinitionsInCluster(clusterArn string) ([]taskdef, error) {
+func (app *App) availableTaskDefinitionsInCluster(ctx context.Context, clusterArn string) ([]taskdef, error) {
 	clusterName := clusterArnToName(clusterArn)
 	taskDefs := make(map[string]struct{})
 	log.Printf("[debug] Checking tasks in %s", clusterArn)
 	tp := ecs.NewListTasksPaginator(app.ecs, &ecs.ListTasksInput{Cluster: &clusterArn})
 	for tp.HasMorePages() {
-		to, err := tp.NextPage(app.ctx)
+		to, err := tp.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if len(to.TaskArns) == 0 {
 			continue
 		}
-		tasks, err := app.ecs.DescribeTasks(app.ctx, &ecs.DescribeTasksInput{
+		tasks, err := app.ecs.DescribeTasks(ctx, &ecs.DescribeTasksInput{
 			Cluster: &clusterArn,
 			Tasks:   to.TaskArns,
 		})
@@ -435,14 +433,14 @@ func (app *App) availableTaskDefinitionsInCluster(clusterArn string) ([]taskdef,
 
 	sp := ecs.NewListServicesPaginator(app.ecs, &ecs.ListServicesInput{Cluster: &clusterArn})
 	for sp.HasMorePages() {
-		so, err := sp.NextPage(app.ctx)
+		so, err := sp.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if len(so.ServiceArns) == 0 {
 			continue
 		}
-		svs, err := app.ecs.DescribeServices(app.ctx, &ecs.DescribeServicesInput{
+		svs, err := app.ecs.DescribeServices(ctx, &ecs.DescribeServicesInput{
 			Cluster:  &clusterArn,
 			Services: so.ServiceArns,
 		})
