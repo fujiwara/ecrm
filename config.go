@@ -3,7 +3,7 @@ package ecrm
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -15,6 +15,7 @@ import (
 
 var (
 	DefaultKeepCount       = 5
+	DefaultExpiresStr      = "30d"
 	DefaultKeepTagPatterns = []string{"latest"}
 )
 
@@ -26,7 +27,7 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
-	if len(c.Clusters) == 0 {
+	if c.Clusters == nil {
 		log.Println("[warn] clusters are not defined. No ECS clusters will be scanned to find images now using.")
 	}
 	for _, cc := range c.Clusters {
@@ -35,7 +36,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if len(c.TaskDefinitions) == 0 {
+	if c.TaskDefinitions == nil {
 		log.Println("[warn] task_definitions are not defined. No task definitions will be scanned to find images now using.")
 	}
 	for _, tc := range c.TaskDefinitions {
@@ -44,7 +45,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if len(c.LambdaFunctions) == 0 {
+	if c.LambdaFunctions == nil {
 		log.Println("[warn] lambda_functions are not defined. No Lambda functions will be scanned to find using images.")
 	}
 	for _, lc := range c.LambdaFunctions {
@@ -61,8 +62,8 @@ func (c *Config) Validate() error {
 }
 
 type ClusterConfig struct {
-	Name        string `yaml:"name"`
-	NamePattern string `yaml:"name_pattern"`
+	Name        string `yaml:"name,omitempty"`
+	NamePattern string `yaml:"name_pattern,omitempty"`
 }
 
 func (c *ClusterConfig) Validate() error {
@@ -81,11 +82,11 @@ func (c *ClusterConfig) Match(name string) bool {
 }
 
 type RepositoryConfig struct {
-	Name            string   `yaml:"name"`
-	NamePattern     string   `yaml:"name_pattern"`
-	Expires         string   `yaml:"expires"`
-	KeepCount       int64    `yaml:"keep_count"`
-	KeepTagPatterns []string `yaml:"keep_tag_patterns"`
+	Name            string   `yaml:"name,omitempty"`
+	NamePattern     string   `yaml:"name_pattern,omitempty"`
+	Expires         string   `yaml:"expires,omitempty"`
+	KeepCount       int64    `yaml:"keep_count,omitempty"`
+	KeepTagPatterns []string `yaml:"keep_tag_patterns,omitempty"`
 
 	expireBefore time.Time
 }
@@ -141,7 +142,7 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := ioutil.ReadAll(f)
+	b, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +157,9 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type TaskdefConfig struct {
-	Name        string `yaml:"name"`
-	NamePattern string `yaml:"name_pattern"`
-	KeepCount   int64  `yaml:"keep_count"`
+	Name        string `yaml:"name,omitempty"`
+	NamePattern string `yaml:"name_pattern,omitempty"`
+	KeepCount   int64  `yaml:"keep_count,omitempty"`
 }
 
 func (c *TaskdefConfig) Validate() error {
@@ -186,10 +187,10 @@ func (c *TaskdefConfig) Match(name string) bool {
 }
 
 type LambdaConfig struct {
-	Name        string `yaml:"name"`
-	NamePattern string `yaml:"name_pattern"`
-	KeepCount   int64  `yaml:"keep_count"`
-	KeepAliase  bool   `yaml:"keep_aliase"`
+	Name        string `yaml:"name,omitempty"`
+	NamePattern string `yaml:"name_pattern,omitempty"`
+	KeepCount   int64  `yaml:"keep_count,omitempty"`
+	KeepAliase  bool   `yaml:"keep_aliase,omitempty"`
 }
 
 func (c *LambdaConfig) Validate() error {

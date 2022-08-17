@@ -155,6 +155,19 @@ func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (map
 	return images, nil
 }
 
+func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error) {
+	repos := make([]ecrTypes.Repository, 0)
+	p := ecr.NewDescribeRepositoriesPaginator(app.ecr, &ecr.DescribeRepositoriesInput{})
+	for p.HasMorePages() {
+		repo, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, repo.Repositories...)
+	}
+	return repos, nil
+}
+
 func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, images map[string]set, opt Option) (map[string][]ecrTypes.ImageIdentifier, error) {
 	idsMaps := make(map[string][]ecrTypes.ImageIdentifier)
 	var sums summaries
@@ -468,10 +481,14 @@ func (app *App) availableTaskDefinitionsInCluster(ctx context.Context, clusterAr
 	return tds, nil
 }
 
-func clusterArnToName(name string) string {
+func arnToName(name, removePrefix string) string {
 	if arn.IsARN(name) {
 		a, _ := arn.Parse(name)
-		return strings.Replace(a.Resource, "cluster/", "", 1)
+		return strings.Replace(a.Resource, removePrefix, "", 1)
 	}
 	return name
+}
+
+func clusterArnToName(arn string) string {
+	return arnToName(arn, "cluster/")
 }
