@@ -1,6 +1,7 @@
 package ecrm
 
 import (
+	"context"
 	"log"
 	"math"
 	"sort"
@@ -11,11 +12,11 @@ import (
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
-func (app *App) lambdaFunctions() ([]lambdaTypes.FunctionConfiguration, error) {
+func (app *App) lambdaFunctions(ctx context.Context) ([]lambdaTypes.FunctionConfiguration, error) {
 	fns := make([]lambdaTypes.FunctionConfiguration, 0)
 	p := lambda.NewListFunctionsPaginator(app.lambda, &lambda.ListFunctionsInput{})
 	for p.HasMorePages() {
-		r, err := p.NextPage(app.ctx)
+		r, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -30,8 +31,8 @@ func (app *App) lambdaFunctions() ([]lambdaTypes.FunctionConfiguration, error) {
 	return fns, nil
 }
 
-func (app *App) scanLambdaFunctions(lcs []*LambdaConfig, images map[string]set) error {
-	funcs, err := app.lambdaFunctions()
+func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, images map[string]set) error {
+	funcs, err := app.lambdaFunctions(ctx)
 	if err != nil {
 		return err
 	}
@@ -60,7 +61,7 @@ func (app *App) scanLambdaFunctions(lcs []*LambdaConfig, images map[string]set) 
 		)
 		var versions []lambdaTypes.FunctionConfiguration
 		for p.HasMorePages() {
-			r, err := p.NextPage(app.ctx)
+			r, err := p.NextPage(ctx)
 			if err != nil {
 				return err
 			}
@@ -74,7 +75,7 @@ func (app *App) scanLambdaFunctions(lcs []*LambdaConfig, images map[string]set) 
 		}
 		for _, v := range versions {
 			log.Println("[debug] Getting Lambda function ", *v.FunctionArn)
-			f, err := app.lambda.GetFunction(app.ctx, &lambda.GetFunctionInput{
+			f, err := app.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
 				FunctionName: v.FunctionArn,
 			})
 			if err != nil {
