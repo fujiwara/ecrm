@@ -5,13 +5,14 @@ jobs:
     strategy:
       matrix:
         go:
-          - 1.18
+          - 1.18.5
+          - 1.19
     name: Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
         id: go
