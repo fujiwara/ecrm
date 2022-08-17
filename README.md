@@ -21,19 +21,21 @@ USAGE:
    ecrm [global options] command [command options] [arguments...]
 
 COMMANDS:
-   delete   scan ECS resources and delete unused ECR images.
-   plan     scan ECS resources and find unused ECR images to delete safety.
-   help, h  Shows a list of commands or help for one command
+   delete    Scan ECS/Lambda resources and delete unused ECR images.
+   generate  Genarete ecrm.yaml
+   plan      Scan ECS/Lambda resources and find unused ECR images to delete safety.
+   help, h   Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --config FILE, -c FILE  Load configuration from FILE (default: ecrm.yaml) [$ECRM_CONFIG]
-   --log-level value       Set log level (debug, info, notice, warn, error) (default: info) [$ECRM_LOG_LEVEL]
+   --config FILE, -c FILE  Load configuration from FILE (default: "ecrm.yaml") [$ECRM_CONFIG]
+   --log-level value       Set log level (debug, info, notice, warn, error) (default: "info") [$ECRM_LOG_LEVEL]
+   --no-color              Whether or not to color the output (default: false) [$ECRM_NO_COLOR]
    --help, -h              show help (default: false)
 ```
 
 ## Configurations
 
-Configuration file is YAML format.
+Configuration file is YAML format. `ecrm generate` can generate a configuration file.
 
 ```yaml
 clusters:
@@ -52,6 +54,22 @@ repositories:
       - latest
   - name_pattern: "dev/*"
     expires: 30days
+```
+
+### generate command
+
+`ecrm generate` scans ECS, Lambda and ECR resources in an AWS account and generate a configuration file.
+
+```console
+$ ecrm generate --help
+NAME:
+   ecrm generate - Genarete ecrm.yaml
+
+USAGE:
+   ecrm generate [command options] [arguments...]
+
+OPTIONS:
+   --help, -h  show help (default: false)
 ```
 
 ### plan command
@@ -88,6 +106,7 @@ OPTIONS:
 ## Author
 
 Copyright (c) 2021 FUJIWARA Shunichiro
+
 ## LICENSE
 
 MIT
