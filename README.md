@@ -41,6 +41,7 @@ Configuration file is YAML format. `ecrm generate` can generate a configuration 
 clusters:
   - name: my-cluster
   - name_pattern: "prod*"
+  - name_pattern: "dev*"
 task_definitions:
   - name: "*"
     keep_count: 3
@@ -85,6 +86,20 @@ USAGE:
 OPTIONS:
    --repository REPOSITORY, -r REPOSITORY  plan for only images in REPOSITORY [$ECRM_REPOSITORY]
    --help, -h                              show help (default: false)
+```
+
+`ecrm plan` shows summaries of unused images in ECR.
+
+`ecrm delete` deletes these images (in `EXPIRED` columns) actually.
+
+```console
+$ ecrm plan
+       REPOSITORY      |    TOTAL     |    EXPIRED    |    KEEP      
+-----------------------+--------------+---------------+--------------
+      dev/app          | 732 (594 GB) | -707 (574 GB) | 25 (21 GB)   
+      dev/nginx        | 720 (28 GB)  | -697 (27 GB)  | 23 (875 MB)  
+      prod/app         | 97 (80 GB)   | -87 (72 GB)   | 10 (8.4 GB)  
+      prod/nginx       | 95 (3.7 GB)  | -85 (3.3 GB)  | 10 (381 MB)  
 ```
 
 ### delete command
