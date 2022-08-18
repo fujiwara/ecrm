@@ -9,12 +9,15 @@ import (
 	"github.com/fujiwara/ecrm"
 )
 
+var version = "current"
+
 func main() {
 	app, err := ecrm.New(context.Background(), os.Getenv("AWS_REGION"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	cliApp := app.NewCLI()
+	cliApp.Version = version
 	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
 		cliApp.Action = app.NewLambdaAction()
 	}
