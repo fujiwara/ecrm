@@ -12,7 +12,8 @@ import (
 var version = "current"
 
 func main() {
-	app, err := ecrm.New(context.Background(), os.Getenv("AWS_REGION"))
+	ctx := context.TODO()
+	app, err := ecrm.New(ctx, os.Getenv("AWS_REGION"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -21,7 +22,7 @@ func main() {
 	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
 		cliApp.Action = app.NewLambdaAction()
 	}
-	if err := cliApp.Run(os.Args); err != nil {
+	if err := cliApp.RunContext(ctx, os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
