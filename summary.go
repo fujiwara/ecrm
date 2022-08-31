@@ -26,9 +26,43 @@ func (s *summary) row() []string {
 	}
 }
 
+func newOutputFormatFrom(s string) outputFormat {
+	switch s {
+	case "table":
+		return formatTable
+	default:
+		return formatInvalid
+	}
+}
+
+type outputFormat int
+
+func (f outputFormat) String() string {
+	switch f {
+	case formatTable:
+		return "table"
+	default:
+		return "unknown"
+	}
+}
+
+const (
+	formatInvalid outputFormat = iota
+	formatTable
+)
+
 type summaries []*summary
 
-func (s *summaries) print(w io.Writer, noColor bool) {
+func (s *summaries) print(w io.Writer, noColor bool, format outputFormat) error {
+	switch format {
+	case formatTable:
+		return s.printTable(w, noColor)
+	default:
+		return fmt.Errorf("unknown output format: %s", format)
+	}
+}
+
+func (s *summaries) printTable(w io.Writer, noColor bool) error {
 	t := tablewriter.NewWriter(w)
 	t.SetHeader(s.header())
 	t.SetBorder(false)
@@ -50,6 +84,7 @@ func (s *summaries) print(w io.Writer, noColor bool) {
 		}
 	}
 	t.Render()
+	return nil
 }
 
 func (s *summaries) header() []string {

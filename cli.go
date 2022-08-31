@@ -44,6 +44,11 @@ func (app *App) NewPlanCommand() *cli.Command {
 				Usage:       "plan for only images in `REPOSITORY`",
 				EnvVars:     []string{"ECRM_REPOSITORY"},
 			},
+			&cli.StringFlag{
+				Name:        "format",
+				DefaultText: "table",
+				Usage:       "plan output format (table)",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			return app.Run(
@@ -52,6 +57,7 @@ func (app *App) NewPlanCommand() *cli.Command {
 				Option{
 					Repository: c.String("repository"),
 					NoColor:    c.Bool("no-color"),
+					Format:     newOutputFormatFrom(c.String("format")),
 				},
 			)
 		},
