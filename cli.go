@@ -38,16 +38,15 @@ func (app *App) NewPlanCommand() *cli.Command {
 		Usage: "Scan ECS/Lambda resources and find unused ECR images to delete safety.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "repository",
-				Aliases:     []string{"r"},
-				DefaultText: "",
-				Usage:       "plan for only images in `REPOSITORY`",
-				EnvVars:     []string{"ECRM_REPOSITORY"},
+				Name:    "repository",
+				Aliases: []string{"r"},
+				Usage:   "plan for only images in `REPOSITORY`",
+				EnvVars: []string{"ECRM_REPOSITORY"},
 			},
 			&cli.StringFlag{
-				Name:        "format",
-				DefaultText: "table",
-				Usage:       "plan output format (table, json)",
+				Name:  "format",
+				Value: "table",
+				Usage: "plan output format (table, json)",
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -79,11 +78,10 @@ func (app *App) NewDeleteCommand() *cli.Command {
 				EnvVars: []string{"ECRM_FORCE"},
 			},
 			&cli.StringFlag{
-				Name:        "repository",
-				Aliases:     []string{"r"},
-				DefaultText: "",
-				Usage:       "delete only images in `REPOSITORY`",
-				EnvVars:     []string{"ECRM_REPOSITORY"},
+				Name:    "repository",
+				Aliases: []string{"r"},
+				Usage:   "delete only images in `REPOSITORY`",
+				EnvVars: []string{"ECRM_REPOSITORY"},
 			},
 		},
 		Action: func(c *cli.Context) error {
