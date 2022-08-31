@@ -78,14 +78,14 @@ OPTIONS:
 ```console
 $ ecrm plan --help
 NAME:
-   ecrm plan - scan ECS resources and find unused ECR images to delete safety.
+   ecrm plan - Scan ECS/Lambda resources and find unused ECR images to delete safety.
 
 USAGE:
    ecrm plan [command options] [arguments...]
 
 OPTIONS:
+   --format value                          plan output format (table, json) (default: table)
    --repository REPOSITORY, -r REPOSITORY  plan for only images in REPOSITORY [$ECRM_REPOSITORY]
-   --help, -h                              show help (default: false)
 ```
 
 `ecrm plan` shows summaries of unused images in ECR.
