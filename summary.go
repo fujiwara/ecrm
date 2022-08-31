@@ -1,6 +1,7 @@
 package ecrm
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -10,25 +11,71 @@ import (
 )
 
 type summary struct {
-	repo             string
-	expiredImages    int64
-	totalImages      int64
-	expiredImageSize int64
-	totalImageSize   int64
+	Repo             string `json:"repository"`
+	ExpiredImages    int64  `json:"expired_images"`
+	TotalImages      int64  `json:"total_images"`
+	ExpiredImageSize int64  `json:"expired_image_size"`
+	TotalImageSize   int64  `json:"total_image_size"`
 }
 
 func (s *summary) row() []string {
 	return []string{
-		s.repo,
-		fmt.Sprintf("%d (%s)", s.totalImages, humanize.Bytes(uint64(s.totalImageSize))),
-		fmt.Sprintf("%d (%s)", -s.expiredImages, humanize.Bytes(uint64(s.expiredImageSize))),
-		fmt.Sprintf("%d (%s)", s.totalImages-s.expiredImages, humanize.Bytes(uint64(s.totalImageSize-s.expiredImageSize))),
+		s.Repo,
+		fmt.Sprintf("%d (%s)", s.TotalImages, humanize.Bytes(uint64(s.TotalImageSize))),
+		fmt.Sprintf("%d (%s)", -s.ExpiredImages, humanize.Bytes(uint64(s.ExpiredImageSize))),
+		fmt.Sprintf("%d (%s)", s.TotalImages-s.ExpiredImages, humanize.Bytes(uint64(s.TotalImageSize-s.ExpiredImageSize))),
 	}
 }
 
+func newOutputFormatFrom(s string) (outputFormat, error) {
+	switch s {
+	case "table":
+		return formatTable, nil
+	case "json":
+		return formatJSON, nil
+	default:
+		return outputFormat(0), fmt.Errorf("invalid format name: %s", s)
+	}
+}
+
+type outputFormat int
+
+func (f outputFormat) String() string {
+	switch f {
+	case formatTable:
+		return "table"
+	case formatJSON:
+		return "json"
+	default:
+		return "unknown"
+	}
+}
+
+const (
+	formatTable outputFormat = iota + 1
+	formatJSON
+)
+
 type summaries []*summary
 
-func (s *summaries) print(w io.Writer, noColor bool) {
+func (s *summaries) print(w io.Writer, noColor bool, format outputFormat) error {
+	switch format {
+	case formatTable:
+		return s.printTable(w, noColor)
+	case formatJSON:
+		return s.printJSON(w)
+	default:
+		return fmt.Errorf("unknown output format: %s", format)
+	}
+}
+
+func (s *summaries) printJSON(w io.Writer) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(s)
+}
+
+func (s *summaries) printTable(w io.Writer, noColor bool) error {
 	t := tablewriter.NewWriter(w)
 	t.SetHeader(s.header())
 	t.SetBorder(false)
@@ -50,6 +97,7 @@ func (s *summaries) print(w io.Writer, noColor bool) {
 		}
 	}
 	t.Render()
+	return nil
 }
 
 func (s *summaries) header() []string {
