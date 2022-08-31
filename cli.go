@@ -44,9 +44,10 @@ func (app *App) NewPlanCommand() *cli.Command {
 				EnvVars: []string{"ECRM_REPOSITORY"},
 			},
 			&cli.StringFlag{
-				Name:  "format",
-				Value: "table",
-				Usage: "plan output format (table, json)",
+				Name:    "format",
+				Value:   "table",
+				Usage:   "plan output format (table, json)",
+				EnvVars: []string{"ECRM_FORMAT"},
 			},
 		},
 		Action: func(c *cli.Context) error {
