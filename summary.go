@@ -11,11 +11,11 @@ import (
 )
 
 type summary struct {
-	Repo             string
-	ExpiredImages    int64
-	TotalImages      int64
-	ExpiredImageSize int64
-	TotalImageSize   int64
+	Repo             string `json:"repository"`
+	ExpiredImages    int64  `json:"expired_images"`
+	TotalImages      int64  `json:"total_images"`
+	ExpiredImageSize int64  `json:"expired_image_size"`
+	TotalImageSize   int64  `json:"total_image_size"`
 }
 
 func (s *summary) row() []string {
