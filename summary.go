@@ -27,14 +27,14 @@ func (s *summary) row() []string {
 	}
 }
 
-func newOutputFormatFrom(s string) outputFormat {
+func newOutputFormatFrom(s string) (outputFormat, error) {
 	switch s {
 	case "table":
-		return formatTable
+		return formatTable, nil
 	case "json":
-		return formatJSON
+		return formatJSON, nil
 	default:
-		return formatInvalid
+		return outputFormat(0), fmt.Errorf("invalid format name: %s", s)
 	}
 }
 
@@ -52,8 +52,7 @@ func (f outputFormat) String() string {
 }
 
 const (
-	formatInvalid outputFormat = iota
-	formatTable
+	formatTable outputFormat = iota + 1
 	formatJSON
 )
 

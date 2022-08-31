@@ -51,13 +51,17 @@ func (app *App) NewPlanCommand() *cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) error {
+			format, err := newOutputFormatFrom(c.String("format"))
+			if err != nil {
+				return err
+			}
 			return app.Run(
 				c.Context,
 				c.String("config"),
 				Option{
 					Repository: c.String("repository"),
 					NoColor:    c.Bool("no-color"),
-					Format:     newOutputFormatFrom(c.String("format")),
+					Format:     format,
 				},
 			)
 		},
