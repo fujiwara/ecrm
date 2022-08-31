@@ -47,7 +47,7 @@ func (app *App) NewPlanCommand() *cli.Command {
 			&cli.StringFlag{
 				Name:        "format",
 				DefaultText: "table",
-				Usage:       "plan output format (table)",
+				Usage:       "plan output format (table, json)",
 			},
 		},
 		Action: func(c *cli.Context) error {

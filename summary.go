@@ -1,6 +1,7 @@
 package ecrm
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -30,6 +31,8 @@ func newOutputFormatFrom(s string) outputFormat {
 	switch s {
 	case "table":
 		return formatTable
+	case "json":
+		return formatJSON
 	default:
 		return formatInvalid
 	}
@@ -41,6 +44,8 @@ func (f outputFormat) String() string {
 	switch f {
 	case formatTable:
 		return "table"
+	case formatJSON:
+		return "json"
 	default:
 		return "unknown"
 	}
@@ -49,6 +54,7 @@ func (f outputFormat) String() string {
 const (
 	formatInvalid outputFormat = iota
 	formatTable
+	formatJSON
 )
 
 type summaries []*summary
@@ -57,9 +63,17 @@ func (s *summaries) print(w io.Writer, noColor bool, format outputFormat) error 
 	switch format {
 	case formatTable:
 		return s.printTable(w, noColor)
+	case formatJSON:
+		return s.printJSON(w)
 	default:
 		return fmt.Errorf("unknown output format: %s", format)
 	}
+}
+
+func (s *summaries) printJSON(w io.Writer) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(s)
 }
 
 func (s *summaries) printTable(w io.Writer, noColor bool) error {
