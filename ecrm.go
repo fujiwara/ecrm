@@ -204,7 +204,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, i
 		}
 	}
 	sort.SliceStable(sums, func(i, j int) bool {
-		return sums[i].repo < sums[j].repo
+		return sums[i].Repo < sums[j].Repo
 	})
 	if err := sums.print(os.Stdout, opt.NoColor, opt.Format); err != nil {
 		return nil, err
@@ -252,11 +252,11 @@ func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.Im
 
 func (app *App) unusedImageIdentifiers(ctx context.Context, name string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
 	sum := &summary{
-		repo:             name,
-		totalImages:      0,
-		expiredImages:    0,
-		totalImageSize:   0,
-		expiredImageSize: 0,
+		Repo:             name,
+		TotalImages:      0,
+		ExpiredImages:    0,
+		TotalImageSize:   0,
+		ExpiredImageSize: 0,
 	}
 	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
 		RepositoryName: &name,
@@ -278,8 +278,8 @@ func (app *App) unusedImageIdentifiers(ctx context.Context, name string, rc *Rep
 IMAGE:
 	for _, d := range details {
 		hold := false
-		sum.totalImages++
-		sum.totalImageSize += aws.ToInt64(d.ImageSizeInBytes)
+		sum.TotalImages++
+		sum.TotalImageSize += aws.ToInt64(d.ImageSizeInBytes)
 	TAG:
 		for _, tag := range d.ImageTags {
 			if rc.MatchTag(tag) {
@@ -311,8 +311,8 @@ IMAGE:
 		}
 		log.Printf("[notice] %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
 		ids = append(ids, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
-		sum.expiredImages++
-		sum.expiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
+		sum.ExpiredImages++
+		sum.ExpiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
 	}
 	return ids, sum, nil
 }

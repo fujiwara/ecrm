@@ -10,19 +10,19 @@ import (
 )
 
 type summary struct {
-	repo             string
-	expiredImages    int64
-	totalImages      int64
-	expiredImageSize int64
-	totalImageSize   int64
+	Repo             string
+	ExpiredImages    int64
+	TotalImages      int64
+	ExpiredImageSize int64
+	TotalImageSize   int64
 }
 
 func (s *summary) row() []string {
 	return []string{
-		s.repo,
-		fmt.Sprintf("%d (%s)", s.totalImages, humanize.Bytes(uint64(s.totalImageSize))),
-		fmt.Sprintf("%d (%s)", -s.expiredImages, humanize.Bytes(uint64(s.expiredImageSize))),
-		fmt.Sprintf("%d (%s)", s.totalImages-s.expiredImages, humanize.Bytes(uint64(s.totalImageSize-s.expiredImageSize))),
+		s.Repo,
+		fmt.Sprintf("%d (%s)", s.TotalImages, humanize.Bytes(uint64(s.TotalImageSize))),
+		fmt.Sprintf("%d (%s)", -s.ExpiredImages, humanize.Bytes(uint64(s.ExpiredImageSize))),
+		fmt.Sprintf("%d (%s)", s.TotalImages-s.ExpiredImages, humanize.Bytes(uint64(s.TotalImageSize-s.ExpiredImageSize))),
 	}
 }
 
