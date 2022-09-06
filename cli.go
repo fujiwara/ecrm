@@ -43,12 +43,6 @@ func (app *App) NewPlanCommand() *cli.Command {
 				Usage:   "plan for only images in `REPOSITORY`",
 				EnvVars: []string{"ECRM_REPOSITORY"},
 			},
-			&cli.StringFlag{
-				Name:    "format",
-				Value:   "table",
-				Usage:   "plan output format (table, json)",
-				EnvVars: []string{"ECRM_FORMAT"},
-			},
 		},
 		Action: func(c *cli.Context) error {
 			format, err := newOutputFormatFrom(c.String("format"))
@@ -83,12 +77,6 @@ func (app *App) NewDeleteCommand() *cli.Command {
 				Aliases: []string{"r"},
 				Usage:   "delete only images in `REPOSITORY`",
 				EnvVars: []string{"ECRM_REPOSITORY"},
-			},
-			&cli.StringFlag{
-				Name:    "format",
-				Value:   "table",
-				Usage:   "output format of plan before delete (table, json)",
-				EnvVars: []string{"ECRM_FORMAT"},
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -135,6 +123,12 @@ func (app *App) NewCLI() *cli.App {
 				Usage:   "Whether or not to color the output",
 				EnvVars: []string{"ECRM_NO_COLOR"},
 			},
+			&cli.StringFlag{
+				Name:    "format",
+				Value:   "table",
+				Usage:   "plan output format (table, json)",
+				EnvVars: []string{"ECRM_FORMAT"},
+			},
 		},
 		Before: func(c *cli.Context) error {
 			color.NoColor = c.Bool("no-color")
@@ -156,6 +150,10 @@ func (app *App) NewLambdaAction() func(c *cli.Context) error {
 	return func(c *cli.Context) error {
 		subcommand := os.Getenv("ECRM_COMMAND")
 		lambda.Start(func() error {
+			format, err := newOutputFormatFrom(c.String("format"))
+			if err != nil {
+				return err
+			}
 			return app.Run(
 				c.Context,
 				c.String("config"),
@@ -164,6 +162,7 @@ func (app *App) NewLambdaAction() func(c *cli.Context) error {
 					Force:      subcommand == "delete", //If it works as bootstrap for a Lambda function, delete images without confirmation.
 					Repository: os.Getenv("ECRM_REPOSITORY"),
 					NoColor:    c.Bool("no-color"),
+					Format:     format,
 				},
 			)
 		})
