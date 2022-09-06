@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.3.3](https://github.com/fujiwara/ecrm/compare/v0.3.2...v0.3.3) - 2022-09-06
+- Move -format flag to global. by @fujiwara in https://github.com/fujiwara/ecrm/pull/14
+
 ## [v0.3.2](https://github.com/fujiwara/ecrm/compare/v0.3.1...v0.3.2) - 2022-09-06
 - need output format for delete command by @mashiike in https://github.com/fujiwara/ecrm/pull/11
 
