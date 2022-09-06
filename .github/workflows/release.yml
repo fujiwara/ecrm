@@ -6,6 +6,12 @@ on:
       - "!**/*"
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "release tag"
+        required: true
+        type: string
 
 jobs:
   goreleaser:
@@ -13,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
