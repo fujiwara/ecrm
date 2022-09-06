@@ -84,8 +84,18 @@ func (app *App) NewDeleteCommand() *cli.Command {
 				Usage:   "delete only images in `REPOSITORY`",
 				EnvVars: []string{"ECRM_REPOSITORY"},
 			},
+			&cli.StringFlag{
+				Name:    "format",
+				Value:   "table",
+				Usage:   "output format of plan before delete (table, json)",
+				EnvVars: []string{"ECRM_FORMAT"},
+			},
 		},
 		Action: func(c *cli.Context) error {
+			format, err := newOutputFormatFrom(c.String("format"))
+			if err != nil {
+				return err
+			}
 			return app.Run(
 				c.Context,
 				c.String("config"),
@@ -94,6 +104,7 @@ func (app *App) NewDeleteCommand() *cli.Command {
 					Force:      c.Bool("force"),
 					Repository: c.String("repository"),
 					NoColor:    c.Bool("no-color"),
+					Format:     format,
 				},
 			)
 		},
