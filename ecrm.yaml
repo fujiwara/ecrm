@@ -11,3 +11,5 @@ repositories:
     expires: 30 days
     keep_tag_patterns:
       - latest
+exclude_files:
+  - my_exclude_file.txt

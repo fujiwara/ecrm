@@ -116,6 +116,10 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 		return err
 	}
 
+	if err = app.readExcludeFiles(ctx, c.ExcludeFiles, images); err != nil {
+		return err
+	}
+
 	idsMaps, err := app.scanRepositories(ctx, c.Repositories, images, opt)
 	if err != nil {
 		return err

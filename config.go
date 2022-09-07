@@ -20,6 +20,7 @@ var (
 )
 
 type Config struct {
+	ExcludeFiles    []string            `yaml:"exclude_files"`
 	Clusters        []*ClusterConfig    `yaml:"clusters"`
 	TaskDefinitions []*TaskdefConfig    `yaml:"task_definitions"`
 	LambdaFunctions []*LambdaConfig     `yaml:"lambda_functions"`
@@ -56,6 +57,12 @@ func (c *Config) Validate() error {
 	for _, rc := range c.Repositories {
 		if err := rc.Validate(); err != nil {
 			return err
+		}
+	}
+
+	for _, ex := range c.ExcludeFiles {
+		if _, err := os.Stat(ex); err != nil {
+			return fmt.Errorf("exclude_files: %s: %w", ex, err)
 		}
 	}
 	return nil
