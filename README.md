@@ -129,7 +129,7 @@ exclude_files:
   - path/to/exclude.txt
 ```
 
-Exclude file is a text file includes ECR image URL lines delimitered by LF.
+Exclude file is a plan text file that includes ECR image URL lines delimited by LF.
 These images are not deleted by `ecrm delete`.
 
 ```txt
