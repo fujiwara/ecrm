@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/fujiwara/ecrm/wildcard"
@@ -25,6 +26,8 @@ type Config struct {
 	TaskDefinitions []*TaskdefConfig    `yaml:"task_definitions"`
 	LambdaFunctions []*LambdaConfig     `yaml:"lambda_functions"`
 	Repositories    []*RepositoryConfig `yaml:"repositories"`
+
+	dir string
 }
 
 func (c *Config) Validate() error {
@@ -60,7 +63,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	for _, ex := range c.ExcludeFiles {
+	for i, ex := range c.ExcludeFiles {
+		if !filepath.IsAbs(ex) {
+			ex = filepath.Join(c.dir, ex)
+			c.ExcludeFiles[i] = ex
+		}
 		if _, err := os.Stat(ex); err != nil {
 			return fmt.Errorf("exclude_files: %s: %w", ex, err)
 		}
@@ -157,6 +164,7 @@ func LoadConfig(path string) (*Config, error) {
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, err
 	}
+	c.dir = filepath.Dir(path)
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
