@@ -11,14 +11,14 @@ import (
 func (app *App) readExcludeFiles(ctx context.Context, paths []string, images map[string]set) error {
 	for _, path := range paths {
 		log.Println("[info] reading exclude file", path)
-		if err := app.readExcludeFile(ctx, path, images); err != nil {
+		if err := readExcludeFile(ctx, path, images); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (app *App) readExcludeFile(ctx context.Context, path string, images map[string]set) error {
+func readExcludeFile(ctx context.Context, path string, images map[string]set) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func (app *App) readExcludeFile(ctx context.Context, path string, images map[str
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		img := scanner.Text()
-		if strings.HasPrefix(img, "#") {
+		if strings.HasPrefix(img, "#") || img == "" {
 			continue
 		}
 		if !strings.Contains(img, ".dkr.ecr.") {

@@ -1,6 +1,0 @@
-# this is comment
-314472643515.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:latest
-hoge
-314472643515.dkr.ecr.ap-northeast-1.amazonaws.com/hub/fujiwara/maprobe:v0.3.5-bullseye-slim
-314472643515.dkr.ecr.ap-northeast-1.amazonaws.com/hub/fujiwara/maprobe:v0.3.5-mackerel-plugins
-# 314472643515.dkr.ecr.ap-northeast-1.amazonaws.com/hub/fujiwara/maprobe:v0.3.5-plain

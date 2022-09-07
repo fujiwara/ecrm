@@ -12,4 +12,4 @@ repositories:
     keep_tag_patterns:
       - latest
 exclude_files:
-  - my_exclude_file.txt
+  - testdata/my_exclude_file.txt

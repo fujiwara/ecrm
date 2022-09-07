@@ -1,0 +1,5 @@
+# this is a comment
+0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:foo
+0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:bar
+
+# 0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:baz  # ignored

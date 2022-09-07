@@ -55,6 +55,8 @@ repositories:
       - latest
   - name_pattern: "dev/*"
     expires: 30days
+exclude_files:
+  - exclude.txt
 ```
 
 ### generate command
@@ -116,6 +118,25 @@ OPTIONS:
    --force                                 force delete images without confirmation (default: false) [$ECRM_FORCE]
    --repository REPOSITORY, -r REPOSITORY  delete only images in REPOSITORY [$ECRM_REPOSITORY]
    --help, -h                              show help (default: false)
+```
+
+### exclude_files
+
+ecrm reads `exclude_files` in config from local files.
+
+```yaml
+exclude_files:
+  - path/to/exclude.txt
+```
+
+Exclude file is a text file includes ECR image URL lines delimitered by LF.
+These images are not deleted by `ecrm delete`.
+
+```txt
+# this is a comment
+0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:foo
+0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:bar
+# 0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/xxx/yyy:baz  # ignored
 ```
 
 ## Author
