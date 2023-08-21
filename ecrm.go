@@ -2,6 +2,7 @@ package ecrm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -21,6 +22,8 @@ import (
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/samber/lo"
+
+	oci "github.com/google/go-containerregistry/pkg/v1"
 )
 
 var untaggedStr = "__UNTAGGED__"
@@ -213,6 +216,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, i
 }
 
 const batchDeleteImageIdsLimit = 100
+const batchGetImageLimit = 100
 
 func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.ImageIdentifier, opt Option) error {
 	if len(ids) == 0 {
@@ -263,12 +267,29 @@ func (app *App) unusedImageIdentifiers(ctx context.Context, name string, rc *Rep
 	})
 	ids := make([]ecrTypes.ImageIdentifier, 0)
 	details := []ecrTypes.ImageDetail{}
+	imageTags := make(map[string]struct{})
+	expiredManifests := make(map[string]struct{})
 	for p.HasMorePages() {
 		imgs, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, sum, err
 		}
-		details = append(details, imgs.ImageDetails...)
+		for _, img := range imgs.ImageDetails {
+			for _, tag := range img.ImageTags {
+				imageTags[tag] = struct{}{}
+			}
+			// adds only container images (not manifests or soci indexes or etc...)
+			mediaType := aws.ToString(img.ArtifactMediaType)
+			if strings.HasPrefix(mediaType, "application/vnd.docker.container.image") {
+				details = append(details, img)
+			} else {
+				log.Printf(
+					"[debug] Skipping non container image: mediatype:%s digest:%s",
+					mediaType,
+					*img.ImageDigest,
+				)
+			}
+		}
 	}
 	sort.SliceStable(details, func(i, j int) bool {
 		return details[i].ImagePushedAt.After(*details[j].ImagePushedAt)
@@ -311,10 +332,69 @@ IMAGE:
 		}
 		log.Printf("[notice] %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
 		ids = append(ids, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
+
+		tagSha256 := strings.Replace(*d.ImageDigest, "sha256:", "sha256-", 1)
+		if _, found := imageTags[tagSha256]; found {
+			// image index that has sha256 digest as tag
+			log.Printf("[notice] %s:%s is expired (manifest) %s", name, tagSha256, pushedAt.Format(time.RFC3339))
+			ids = append(ids, ecrTypes.ImageIdentifier{ImageTag: aws.String(tagSha256)})
+			expiredManifests[tagSha256] = struct{}{}
+			sum.expiredManifests++
+		}
 		sum.ExpiredImages++
 		sum.ExpiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
 	}
+
+	if sociIds, err := app.findSociIndex(ctx, name, lo.Keys(expiredManifests)); err != nil {
+		return nil, sum, err
+	} else {
+		sum.expiredSociIndexes += int64(len(sociIds))
+		ids = append(ids, sociIds...)
+	}
+
+	if sum.expiredManifests > 0 {
+		log.Printf("[notice] %s expired manifests: %d", name, sum.expiredManifests)
+	}
+	if sum.expiredSociIndexes > 0 {
+		log.Printf("[notice] %s expired soci indexes: %d", name, sum.expiredSociIndexes)
+	}
+
 	return ids, sum, nil
+}
+
+func (app *App) findSociIndex(ctx context.Context, repo string, imageTags []string) ([]ecrTypes.ImageIdentifier, error) {
+	ids := make([]ecrTypes.ImageIdentifier, 0, len(imageTags))
+
+	for _, c := range lo.Chunk(imageTags, batchGetImageLimit) {
+		imageIds := make([]ecrTypes.ImageIdentifier, 0, len(c))
+		for _, tag := range c {
+			imageIds = append(imageIds, ecrTypes.ImageIdentifier{ImageTag: aws.String(tag)})
+		}
+		res, err := app.ecr.BatchGetImage(ctx, &ecr.BatchGetImageInput{
+			ImageIds:       imageIds,
+			RepositoryName: &repo,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, img := range res.Images {
+			if img.ImageManifest == nil {
+				continue
+			}
+			var m oci.IndexManifest
+			if err := json.Unmarshal([]byte(*img.ImageManifest), &m); err != nil {
+				log.Printf("[warn] failed to parse manifest: %s %s", *img.ImageId.ImageDigest, err)
+				continue
+			}
+			for _, d := range m.Manifests {
+				if d.ArtifactType == "application/vnd.amazon.soci.index.v1+json" {
+					log.Printf("[notice] %s:%s is expired (soci index)", repo, d.Digest.String())
+					ids = append(ids, ecrTypes.ImageIdentifier{ImageDigest: aws.String(d.Digest.String())})
+				}
+			}
+		}
+	}
+	return ids, nil
 }
 
 func imageTag(d ecrTypes.ImageDetail) (string, bool) {

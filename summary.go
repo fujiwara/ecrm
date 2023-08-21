@@ -16,6 +16,9 @@ type summary struct {
 	TotalImages      int64  `json:"total_images"`
 	ExpiredImageSize int64  `json:"expired_image_size"`
 	TotalImageSize   int64  `json:"total_image_size"`
+
+	expiredManifests   int64
+	expiredSociIndexes int64
 }
 
 func (s *summary) row() []string {
