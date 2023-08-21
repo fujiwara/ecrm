@@ -24,6 +24,7 @@ import (
 	"github.com/samber/lo"
 
 	oci "github.com/google/go-containerregistry/pkg/v1"
+	ociTypes "github.com/google/go-containerregistry/pkg/v1/types"
 )
 
 var untaggedStr = "__UNTAGGED__"
@@ -262,39 +263,12 @@ func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *Rep
 		TotalImageSize:   0,
 		ExpiredImageSize: 0,
 	}
-	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
-		RepositoryName: &repo,
-	})
-	ids := make([]ecrTypes.ImageIdentifier, 0)
-	details := []ecrTypes.ImageDetail{}
-	foundTags := make(map[string]struct{})
-	expiredManifests := make(map[string]struct{})
-	for p.HasMorePages() {
-		imgs, err := p.NextPage(ctx)
-		if err != nil {
-			return nil, sum, err
-		}
-		for _, img := range imgs.ImageDetails {
-			for _, tag := range img.ImageTags {
-				foundTags[tag] = struct{}{}
-			}
-			// adds only container images (not manifests or soci indexes or etc...)
-			mediaType := aws.ToString(img.ArtifactMediaType)
-			if strings.HasPrefix(mediaType, "application/vnd.docker.container.image") {
-				details = append(details, img)
-			} else {
-				log.Printf(
-					"[debug] Skipping non container image: mediatype:%s digest:%s",
-					mediaType,
-					*img.ImageDigest,
-				)
-			}
-		}
+	details, foundTags, err := app.listImageDetails(ctx, repo)
+	if err != nil {
+		return nil, sum, err
 	}
-	sort.SliceStable(details, func(i, j int) bool {
-		return details[i].ImagePushedAt.After(*details[j].ImagePushedAt)
-	})
-
+	expiredIds := make([]ecrTypes.ImageIdentifier, 0)
+	expiredManifests := make(map[string]struct{})
 	var keepCount int64
 IMAGE:
 	for _, d := range details {
@@ -331,13 +305,14 @@ IMAGE:
 			}
 		}
 		log.Printf("[notice] %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
-		ids = append(ids, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
+		expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
 
+		// expired manifest
 		tagSha256 := strings.Replace(*d.ImageDigest, "sha256:", "sha256-", 1)
 		if _, found := foundTags[tagSha256]; found {
 			// image index that has sha256 digest as tag
 			log.Printf("[notice] %s:%s is expired (manifest) %s", repo, tagSha256, pushedAt.Format(time.RFC3339))
-			ids = append(ids, ecrTypes.ImageIdentifier{ImageTag: aws.String(tagSha256)})
+			expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageTag: aws.String(tagSha256)})
 			expiredManifests[tagSha256] = struct{}{}
 			sum.expiredManifests++
 		}
@@ -349,7 +324,7 @@ IMAGE:
 		return nil, sum, err
 	} else {
 		sum.expiredSociIndexes += int64(len(sociIds))
-		ids = append(ids, sociIds...)
+		expiredIds = append(expiredIds, sociIds...)
 	}
 
 	if sum.expiredManifests > 0 {
@@ -359,7 +334,43 @@ IMAGE:
 		log.Printf("[notice] %s expired soci indexes: %d", repo, sum.expiredSociIndexes)
 	}
 
-	return ids, sum, nil
+	return expiredIds, sum, nil
+}
+
+func (app *App) listImageDetails(ctx context.Context, repo string) ([]ecrTypes.ImageDetail, map[string]struct{}, error) {
+	details := make([]ecrTypes.ImageDetail, 0)
+	foundTags := make(map[string]struct{}, 0)
+
+	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
+		RepositoryName: &repo,
+	})
+	for p.HasMorePages() {
+		imgs, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, img := range imgs.ImageDetails {
+			for _, tag := range img.ImageTags {
+				foundTags[tag] = struct{}{}
+			}
+			// adds only container images (not manifests or soci indexes or etc...)
+			mediaType := ociTypes.MediaType(aws.ToString(img.ArtifactMediaType))
+			switch mediaType {
+			case ociTypes.DockerConfigJSON, ociTypes.OCIConfigJSON:
+				details = append(details, img)
+			default:
+				log.Printf(
+					"[debug] Skipping non container image: mediatype:%s digest:%s",
+					mediaType,
+					*img.ImageDigest,
+				)
+			}
+		}
+	}
+	sort.SliceStable(details, func(i, j int) bool {
+		return details[i].ImagePushedAt.After(*details[j].ImagePushedAt)
+	})
+	return details, foundTags, nil
 }
 
 func (app *App) findSociIndex(ctx context.Context, repo string, imageTags []string) ([]ecrTypes.ImageIdentifier, error) {
