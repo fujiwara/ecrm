@@ -254,20 +254,20 @@ func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.Im
 	return nil
 }
 
-func (app *App) unusedImageIdentifiers(ctx context.Context, name string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
+func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
 	sum := &summary{
-		Repo:             name,
+		Repo:             repo,
 		TotalImages:      0,
 		ExpiredImages:    0,
 		TotalImageSize:   0,
 		ExpiredImageSize: 0,
 	}
 	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
-		RepositoryName: &name,
+		RepositoryName: &repo,
 	})
 	ids := make([]ecrTypes.ImageIdentifier, 0)
 	details := []ecrTypes.ImageDetail{}
-	imageTags := make(map[string]struct{})
+	foundTags := make(map[string]struct{})
 	expiredManifests := make(map[string]struct{})
 	for p.HasMorePages() {
 		imgs, err := p.NextPage(ctx)
@@ -276,7 +276,7 @@ func (app *App) unusedImageIdentifiers(ctx context.Context, name string, rc *Rep
 		}
 		for _, img := range imgs.ImageDetails {
 			for _, tag := range img.ImageTags {
-				imageTags[tag] = struct{}{}
+				foundTags[tag] = struct{}{}
 			}
 			// adds only container images (not manifests or soci indexes or etc...)
 			mediaType := aws.ToString(img.ArtifactMediaType)
@@ -318,7 +318,7 @@ IMAGE:
 		}
 		pushedAt := *d.ImagePushedAt
 		tag, tagged := imageTag(d)
-		displayName := name + ":" + tag
+		displayName := repo + ":" + tag
 		if !rc.IsExpired(pushedAt) {
 			log.Println("[info]", displayName, "is not expired")
 			continue IMAGE
@@ -334,9 +334,9 @@ IMAGE:
 		ids = append(ids, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
 
 		tagSha256 := strings.Replace(*d.ImageDigest, "sha256:", "sha256-", 1)
-		if _, found := imageTags[tagSha256]; found {
+		if _, found := foundTags[tagSha256]; found {
 			// image index that has sha256 digest as tag
-			log.Printf("[notice] %s:%s is expired (manifest) %s", name, tagSha256, pushedAt.Format(time.RFC3339))
+			log.Printf("[notice] %s:%s is expired (manifest) %s", repo, tagSha256, pushedAt.Format(time.RFC3339))
 			ids = append(ids, ecrTypes.ImageIdentifier{ImageTag: aws.String(tagSha256)})
 			expiredManifests[tagSha256] = struct{}{}
 			sum.expiredManifests++
@@ -345,7 +345,7 @@ IMAGE:
 		sum.ExpiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
 	}
 
-	if sociIds, err := app.findSociIndex(ctx, name, lo.Keys(expiredManifests)); err != nil {
+	if sociIds, err := app.findSociIndex(ctx, repo, lo.Keys(expiredManifests)); err != nil {
 		return nil, sum, err
 	} else {
 		sum.expiredSociIndexes += int64(len(sociIds))
@@ -353,10 +353,10 @@ IMAGE:
 	}
 
 	if sum.expiredManifests > 0 {
-		log.Printf("[notice] %s expired manifests: %d", name, sum.expiredManifests)
+		log.Printf("[notice] %s expired manifests: %d", repo, sum.expiredManifests)
 	}
 	if sum.expiredSociIndexes > 0 {
-		log.Printf("[notice] %s expired soci indexes: %d", name, sum.expiredSociIndexes)
+		log.Printf("[notice] %s expired soci indexes: %d", repo, sum.expiredSociIndexes)
 	}
 
 	return ids, sum, nil
