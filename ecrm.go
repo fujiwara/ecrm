@@ -27,6 +27,10 @@ import (
 	ociTypes "github.com/google/go-containerregistry/pkg/v1/types"
 )
 
+const (
+	MediaTypeSociIndex = "application/vnd.amazon.soci.index.v1+json"
+)
+
 var untaggedStr = "__UNTAGGED__"
 
 type App struct {
@@ -175,7 +179,7 @@ func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error)
 
 func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, images map[string]set, opt Option) (map[string][]ecrTypes.ImageIdentifier, error) {
 	idsMaps := make(map[string][]ecrTypes.ImageIdentifier)
-	var sums summaries
+	sums := SummaryTable{}
 	in := &ecr.DescribeRepositoriesInput{}
 	if opt.Repository != "" {
 		in.RepositoryNames = []string{opt.Repository}
@@ -203,7 +207,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, i
 			if err != nil {
 				return nil, err
 			}
-			sums = append(sums, sum)
+			sums = append(sums, sum...)
 			idsMaps[name] = ids
 		}
 	}
@@ -255,26 +259,44 @@ func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.Im
 	return nil
 }
 
-func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, *summary, error) {
-	sum := &summary{
-		Repo:             repo,
-		TotalImages:      0,
-		ExpiredImages:    0,
-		TotalImageSize:   0,
-		ExpiredImageSize: 0,
+func isContainerImage(d ecrTypes.ImageDetail) bool {
+	t := ociTypes.MediaType(aws.ToString(d.ArtifactMediaType))
+	return t == ociTypes.DockerConfigJSON || t == ociTypes.OCIConfigJSON
+}
+
+func isImageIndex(d ecrTypes.ImageDetail) bool {
+	if aws.ToString(d.ArtifactMediaType) != "" {
+		return false
 	}
-	details, foundTags, err := app.listImageDetails(ctx, repo)
+	switch ociTypes.MediaType(aws.ToString(d.ImageManifestMediaType)) {
+	case ociTypes.OCIImageIndex:
+		return true
+	}
+	return false
+}
+
+func isSociIndex(d ecrTypes.ImageDetail) bool {
+	return ociTypes.MediaType(aws.ToString(d.ArtifactMediaType)) == MediaTypeSociIndex
+}
+
+func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
+	sums := NewRepoSummary(repo)
+	details, idByTags, err := app.listImageDetails(ctx, repo)
 	if err != nil {
-		return nil, sum, err
+		return nil, sums, err
 	}
+	log.Printf("[debug] %s has %d images", repo, len(details))
 	expiredIds := make([]ecrTypes.ImageIdentifier, 0)
-	expiredManifests := make(map[string]struct{})
+	expiredImageIndexes := make(map[string]struct{})
 	var keepCount int64
 IMAGE:
 	for _, d := range details {
+		if !isContainerImage(d) {
+			continue IMAGE
+		}
+		log.Printf("[debug] is image %s", *d.ImageDigest)
 		hold := false
-		sum.TotalImages++
-		sum.TotalImageSize += aws.ToInt64(d.ImageSizeInBytes)
+		sums.Add(d)
 	TAG:
 		for _, tag := range d.ImageTags {
 			if rc.MatchTag(tag) {
@@ -306,40 +328,59 @@ IMAGE:
 		}
 		log.Printf("[notice] %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
 		expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
+		sums.Expire(d)
 
-		// expired manifest
 		tagSha256 := strings.Replace(*d.ImageDigest, "sha256:", "sha256-", 1)
-		if _, found := foundTags[tagSha256]; found {
-			// image index that has sha256 digest as tag
-			log.Printf("[notice] %s:%s is expired (manifest) %s", repo, tagSha256, pushedAt.Format(time.RFC3339))
-			expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageTag: aws.String(tagSha256)})
-			expiredManifests[tagSha256] = struct{}{}
-			sum.expiredManifests++
+		if _, found := idByTags[tagSha256]; found {
+			expiredImageIndexes[tagSha256] = struct{}{}
 		}
-		sum.ExpiredImages++
-		sum.ExpiredImageSize += aws.ToInt64(d.ImageSizeInBytes)
 	}
 
-	if sociIds, err := app.findSociIndex(ctx, repo, lo.Keys(expiredManifests)); err != nil {
-		return nil, sum, err
-	} else {
-		sum.expiredSociIndexes += int64(len(sociIds))
-		expiredIds = append(expiredIds, sociIds...)
+IMAGE_INDEX:
+	for _, d := range details {
+		if !isImageIndex(d) {
+			continue IMAGE_INDEX
+		}
+		log.Printf("[debug] is an image index %s", *d.ImageDigest)
+		sums.Add(d)
+		for _, tag := range d.ImageTags {
+			if _, expired := expiredImageIndexes[tag]; expired {
+				log.Printf("[notice] %s:%s is expired (image index)", repo, tag)
+				sums.Expire(d)
+				expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
+				continue IMAGE_INDEX
+			}
+		}
 	}
 
-	if sum.expiredManifests > 0 {
-		log.Printf("[notice] %s expired manifests: %d", repo, sum.expiredManifests)
-	}
-	if sum.expiredSociIndexes > 0 {
-		log.Printf("[notice] %s expired soci indexes: %d", repo, sum.expiredSociIndexes)
+	sociIds, err := app.findSociIndex(ctx, repo, lo.Keys(expiredImageIndexes))
+	if err != nil {
+		return nil, sums, err
 	}
 
-	return expiredIds, sum, nil
+SOCI_INDEX:
+	for _, d := range details {
+		if !isSociIndex(d) {
+			continue SOCI_INDEX
+		}
+		log.Printf("[debug] is soci index %s", *d.ImageDigest)
+		sums.Add(d)
+		for _, id := range sociIds {
+			if aws.ToString(id.ImageDigest) == aws.ToString(d.ImageDigest) {
+				log.Printf("[notice] %s:%s is expired (soci index)", repo, *d.ImageDigest)
+				sums.Expire(d)
+				expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
+				continue SOCI_INDEX
+			}
+		}
+	}
+
+	return expiredIds, sums, nil
 }
 
-func (app *App) listImageDetails(ctx context.Context, repo string) ([]ecrTypes.ImageDetail, map[string]struct{}, error) {
+func (app *App) listImageDetails(ctx context.Context, repo string) ([]ecrTypes.ImageDetail, map[string]ecrTypes.ImageIdentifier, error) {
 	details := make([]ecrTypes.ImageDetail, 0)
-	foundTags := make(map[string]struct{}, 0)
+	foundTags := make(map[string]ecrTypes.ImageIdentifier, 0)
 
 	p := ecr.NewDescribeImagesPaginator(app.ecr, &ecr.DescribeImagesInput{
 		RepositoryName: &repo,
@@ -350,20 +391,9 @@ func (app *App) listImageDetails(ctx context.Context, repo string) ([]ecrTypes.I
 			return nil, nil, err
 		}
 		for _, img := range imgs.ImageDetails {
+			details = append(details, img)
 			for _, tag := range img.ImageTags {
-				foundTags[tag] = struct{}{}
-			}
-			// adds only container images (not manifests or soci indexes or etc...)
-			mediaType := ociTypes.MediaType(aws.ToString(img.ArtifactMediaType))
-			switch mediaType {
-			case ociTypes.DockerConfigJSON, ociTypes.OCIConfigJSON:
-				details = append(details, img)
-			default:
-				log.Printf(
-					"[debug] Skipping non container image: mediatype:%s digest:%s",
-					mediaType,
-					*img.ImageDigest,
-				)
+				foundTags[tag] = ecrTypes.ImageIdentifier{ImageDigest: img.ImageDigest}
 			}
 		}
 	}
@@ -384,6 +414,11 @@ func (app *App) findSociIndex(ctx context.Context, repo string, imageTags []stri
 		res, err := app.ecr.BatchGetImage(ctx, &ecr.BatchGetImageInput{
 			ImageIds:       imageIds,
 			RepositoryName: &repo,
+			AcceptedMediaTypes: []string{
+				string(ociTypes.OCIManifestSchema1),
+				string(ociTypes.DockerManifestSchema1),
+				string(ociTypes.DockerManifestSchema2),
+			},
 		})
 		if err != nil {
 			return nil, err
@@ -394,12 +429,11 @@ func (app *App) findSociIndex(ctx context.Context, repo string, imageTags []stri
 			}
 			var m oci.IndexManifest
 			if err := json.Unmarshal([]byte(*img.ImageManifest), &m); err != nil {
-				log.Printf("[warn] failed to parse manifest: %s %s", *img.ImageId.ImageDigest, err)
+				log.Printf("[warn] failed to parse manifest: %s %s", *img.ImageManifest, err)
 				continue
 			}
 			for _, d := range m.Manifests {
-				if d.ArtifactType == "application/vnd.amazon.soci.index.v1+json" {
-					log.Printf("[notice] %s:%s is expired (soci index)", repo, d.Digest.String())
+				if d.ArtifactType == MediaTypeSociIndex {
 					ids = append(ids, ecrTypes.ImageIdentifier{ImageDigest: aws.String(d.Digest.String())})
 				}
 			}
