@@ -259,26 +259,6 @@ func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.Im
 	return nil
 }
 
-func isContainerImage(d ecrTypes.ImageDetail) bool {
-	t := ociTypes.MediaType(aws.ToString(d.ArtifactMediaType))
-	return t == ociTypes.DockerConfigJSON || t == ociTypes.OCIConfigJSON
-}
-
-func isImageIndex(d ecrTypes.ImageDetail) bool {
-	if aws.ToString(d.ArtifactMediaType) != "" {
-		return false
-	}
-	switch ociTypes.MediaType(aws.ToString(d.ImageManifestMediaType)) {
-	case ociTypes.OCIImageIndex:
-		return true
-	}
-	return false
-}
-
-func isSociIndex(d ecrTypes.ImageDetail) bool {
-	return ociTypes.MediaType(aws.ToString(d.ArtifactMediaType)) == MediaTypeSociIndex
-}
-
 func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
 	sums := NewRepoSummary(repo)
 	details, idByTags, err := app.listImageDetails(ctx, repo)
