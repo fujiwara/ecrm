@@ -11,10 +11,6 @@ func isContainerImage(d ecrTypes.ImageDetail) bool {
 	return t == ociTypes.DockerConfigJSON || t == ociTypes.OCIConfigJSON
 }
 
-func isContainerImageFilter(d ecrTypes.ImageDetail, _ int) bool {
-	return isContainerImage(d)
-}
-
 func isImageIndex(d ecrTypes.ImageDetail) bool {
 	if aws.ToString(d.ArtifactMediaType) != "" {
 		return false
@@ -26,14 +22,6 @@ func isImageIndex(d ecrTypes.ImageDetail) bool {
 	return false
 }
 
-func isImageIndexFilter(d ecrTypes.ImageDetail, _ int) bool {
-	return isImageIndex(d)
-}
-
 func isSociIndex(d ecrTypes.ImageDetail) bool {
 	return ociTypes.MediaType(aws.ToString(d.ArtifactMediaType)) == MediaTypeSociIndex
-}
-
-func isSociIndexFilter(d ecrTypes.ImageDetail, _ int) bool {
-	return isSociIndex(d)
 }
