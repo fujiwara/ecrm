@@ -270,10 +270,7 @@ func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *Rep
 	expiredImageIndexes := make(map[string]struct{})
 	var keepCount int64
 IMAGE:
-	for _, d := range details {
-		if !isContainerImage(d) {
-			continue IMAGE
-		}
+	for _, d := range lo.Filter(details, isContainerImageFilter) {
 		log.Printf("[debug] is image %s", *d.ImageDigest)
 		hold := false
 		sums.Add(d)
@@ -317,10 +314,7 @@ IMAGE:
 	}
 
 IMAGE_INDEX:
-	for _, d := range details {
-		if !isImageIndex(d) {
-			continue IMAGE_INDEX
-		}
+	for _, d := range lo.Filter(details, isImageIndexFilter) {
 		log.Printf("[debug] is an image index %s", *d.ImageDigest)
 		sums.Add(d)
 		for _, tag := range d.ImageTags {
@@ -339,10 +333,7 @@ IMAGE_INDEX:
 	}
 
 SOCI_INDEX:
-	for _, d := range details {
-		if !isSociIndex(d) {
-			continue SOCI_INDEX
-		}
+	for _, d := range lo.Filter(details, isSociIndexFilter) {
 		log.Printf("[debug] is soci index %s", *d.ImageDigest)
 		sums.Add(d)
 		for _, id := range sociIds {
