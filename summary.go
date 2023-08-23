@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	SummaryTypeImage      = "image"
-	SummaryTypeImageIndex = "image_index"
-	SummaryTypeSociIndex  = "soci_index"
+	SummaryTypeImage      = "Image"
+	SummaryTypeImageIndex = "Image index"
+	SummaryTypeSociIndex  = "Soci index"
 )
 
 type RepoSummary []*Summary
