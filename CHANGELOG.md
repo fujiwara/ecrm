@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.0](https://github.com/fujiwara/ecrm/compare/v0.3.3...v0.4.0) - 2023-08-29
+- support to expire image indexes and soci indexes. by @fujiwara in https://github.com/fujiwara/ecrm/pull/17
+- use go 1.21 by @fujiwara in https://github.com/fujiwara/ecrm/pull/19
+
 ## [v0.3.3](https://github.com/fujiwara/ecrm/compare/v0.3.2...v0.3.3) - 2022-09-06
 - Move -format flag to global. by @fujiwara in https://github.com/fujiwara/ecrm/pull/14
 
