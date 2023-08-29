@@ -118,6 +118,32 @@ OPTIONS:
    --help, -h                              show help (default: false)
 ```
 
+## Notes
+
+### Support to image indexes and soci indexes.
+
+ecrm supports image indexes and soci (Seekable OCI) indexes. ecrm deletes these images that are related to expired images safely.
+
+1. Scans ECR repositories.
+   - Detect image type (Image, Image index, Soci index).
+2. Find expired images.
+3. Find expired image indexes related to expired images by the image tag (sha256-{digest of image}).
+4. Find soci indexes related to expired image indexes using ECR BatchGetImage API for expired images.
+
+An example output is here.
+
+```
+  REPOSITORY |    TYPE     |   TOTAL    |   EXPIRED   |    KEEP     
+-------------+-------------+------------+-------------+-------------
+  xxx/app    | Image       | 30 (40 GB) | -27 (36 GB) | 3 (3.8 GB)  
+  xxx/app    | Image index | 5 (163 MB) | -3 (98 MB)  | 2 (65 MB)   
+  xxx/app    | Soci index  | 5 (163 MB) | -3 (98 MB)  | 2 (65 MB)  
+```
+
+See also
+- [Under the hood: Lazy Loading Container Images with Seekable OCI and AWS Fargate](https://aws.amazon.com/jp/blogs/containers/under-the-hood-lazy-loading-container-images-with-seekable-oci-and-aws-fargate/)
+- [AWS Fargate Enables Faster Container Startup using Seekable OCI](https://aws.amazon.com/jp/blogs/aws/aws-fargate-enables-faster-container-startup-using-seekable-oci/)
+
 ## Author
 
 Copyright (c) 2021 FUJIWARA Shunichiro
