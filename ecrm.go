@@ -473,12 +473,12 @@ func (app *App) scanClusters(ctx context.Context, clustersConfigs []*ClusterConf
 
 func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskdef, error) {
 	tds := make([]taskdef, 0)
-	famiries, err := app.taskDefinitionFamilies(ctx)
+	families, err := app.taskDefinitionFamilies(ctx)
 	if err != nil {
 		return tds, err
 	}
 
-	for _, family := range famiries {
+	for _, family := range families {
 		var name string
 		var keepCount int64
 		for _, tc := range tcs {
