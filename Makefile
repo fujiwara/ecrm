@@ -13,4 +13,4 @@ install:
 	go install github.com/fujiwara/ecrm/cmd/ecrm
 
 dist:
-	goreleaser build --snapshot --rm-dist
+	goreleaser build --snapshot --clean
