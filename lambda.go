@@ -31,7 +31,7 @@ func (app *App) lambdaFunctions(ctx context.Context) ([]lambdaTypes.FunctionConf
 	return fns, nil
 }
 
-func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, images map[string]set) error {
+func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, images map[ImageID]set) error {
 	funcs, err := app.lambdaFunctions(ctx)
 	if err != nil {
 		return err
@@ -41,9 +41,9 @@ func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, im
 		var name string
 		var keepCount int64
 		for _, tc := range lcs {
-			fname := *fn.FunctionName
-			if tc.Match(fname) {
-				name = fname
+			fn := *fn.FunctionName
+			if tc.Match(fn) {
+				name = fn
 				keepCount = tc.KeepCount
 				break
 			}
@@ -81,7 +81,7 @@ func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, im
 			if err != nil {
 				return err
 			}
-			img := aws.ToString(f.Code.ImageUri)
+			img := ImageID(aws.ToString(f.Code.ImageUri))
 			if img == "" {
 				continue
 			}

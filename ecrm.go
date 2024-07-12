@@ -33,6 +33,9 @@ const (
 
 var untaggedStr = "__UNTAGGED__"
 
+// ImageID is a type of ID of an ECR image.
+type ImageID string
+
 type App struct {
 	ecr    *ecr.Client
 	ecs    *ecs.Client
@@ -140,8 +143,8 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 	return nil
 }
 
-func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (map[string]set, error) {
-	images := make(map[string]set)
+func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (map[ImageID]set, error) {
+	images := make(map[ImageID]set)
 	dup := make(map[string]struct{})
 	for _, td := range taskdefs {
 		if _, found := dup[td.String()]; found {
@@ -177,7 +180,7 @@ func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error)
 	return repos, nil
 }
 
-func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, images map[string]set, opt Option) (map[string][]ecrTypes.ImageIdentifier, error) {
+func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, images map[ImageID]set, opt Option) (map[string][]ecrTypes.ImageIdentifier, error) {
 	idsMaps := make(map[string][]ecrTypes.ImageIdentifier)
 	sums := SummaryTable{}
 	in := &ecr.DescribeRepositoriesInput{}
@@ -259,7 +262,7 @@ func (app *App) DeleteImages(ctx context.Context, repo string, ids []ecrTypes.Im
 	return nil
 }
 
-func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *RepositoryConfig, holdImages map[string]set) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
+func (app *App) unusedImageIdentifiers(ctx context.Context, repo string, rc *RepositoryConfig, holdImages map[ImageID]set) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
 	sums := NewRepoSummary(repo)
 	images, imageIndexes, sociIndexes, idByTags, err := app.listImageDetails(ctx, repo)
 	if err != nil {
@@ -276,7 +279,7 @@ IMAGE:
 		sums.Add(d)
 
 		// Check if the image is in use (digest)
-		imageArnSha256 := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest)
+		imageArnSha256 := ImageID(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest))
 		if holdImages[imageArnSha256] != nil && !holdImages[imageArnSha256].isEmpty() {
 			log.Printf("[info] %s@%s is in used, keep it", repo, *d.ImageDigest)
 			continue IMAGE
@@ -288,7 +291,7 @@ IMAGE:
 				log.Printf("[info] %s:%s is matched by tag condition, keep it", repo, tag)
 				continue IMAGE
 			}
-			imageArn := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag)
+			imageArn := ImageID(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag))
 			if holdImages[imageArn] != nil && !holdImages[imageArn].isEmpty() {
 				log.Printf("[info] %s:%s is in used, keep it", repo, tag)
 				continue IMAGE
@@ -514,8 +517,8 @@ func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskd
 	return tds, nil
 }
 
-func (app App) extractECRImages(ctx context.Context, tdName string) ([]string, error) {
-	images := make([]string, 0)
+func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageID, error) {
+	images := make([]ImageID, 0)
 	out, err := app.ecs.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: &tdName,
 	})
@@ -525,7 +528,7 @@ func (app App) extractECRImages(ctx context.Context, tdName string) ([]string, e
 	for _, container := range out.TaskDefinition.ContainerDefinitions {
 		img := *container.Image
 		if strings.Contains(img, ".dkr.ecr.") {
-			images = append(images, *container.Image)
+			images = append(images, ImageID(*container.Image))
 		} else {
 			log.Printf("[debug] Skipping non ECR image %s", img)
 		}
