@@ -22,7 +22,7 @@ const (
 
 type RepoSummary []*Summary
 
-func NewRepoSummary(repo string) RepoSummary {
+func NewRepoSummary(repo RepositoryName) RepoSummary {
 	return []*Summary{
 		{Repo: repo, Type: SummaryTypeImage},
 		{Repo: repo, Type: SummaryTypeImageIndex},
@@ -63,12 +63,12 @@ func (s RepoSummary) Expire(img ecrTypes.ImageDetail) {
 }
 
 type Summary struct {
-	Repo             string `json:"repository"`
-	Type             string `json:"type"`
-	ExpiredImages    int64  `json:"expired_images"`
-	TotalImages      int64  `json:"total_images"`
-	ExpiredImageSize int64  `json:"expired_image_size"`
-	TotalImageSize   int64  `json:"total_image_size"`
+	Repo             RepositoryName `json:"repository"`
+	Type             string         `json:"type"`
+	ExpiredImages    int64          `json:"expired_images"`
+	TotalImages      int64          `json:"total_images"`
+	ExpiredImageSize int64          `json:"expired_image_size"`
+	TotalImageSize   int64          `json:"total_image_size"`
 }
 
 func (s *Summary) printable() bool {
@@ -80,7 +80,7 @@ func (s *Summary) printable() bool {
 
 func (s *Summary) row() []string {
 	return []string{
-		s.Repo,
+		string(s.Repo),
 		s.Type,
 		fmt.Sprintf("%d (%s)", s.TotalImages, humanize.Bytes(uint64(s.TotalImageSize))),
 		fmt.Sprintf("%d (%s)", -s.ExpiredImages, humanize.Bytes(uint64(s.ExpiredImageSize))),

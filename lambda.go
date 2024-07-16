@@ -31,19 +31,20 @@ func (app *App) lambdaFunctions(ctx context.Context) ([]lambdaTypes.FunctionConf
 	return fns, nil
 }
 
-func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, images map[string]set) error {
+func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) (Images, error) {
 	funcs, err := app.lambdaFunctions(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	images := make(Images)
 
 	for _, fn := range funcs {
 		var name string
 		var keepCount int64
 		for _, tc := range lcs {
-			fname := *fn.FunctionName
-			if tc.Match(fname) {
-				name = fname
+			fn := *fn.FunctionName
+			if tc.Match(fn) {
+				name = fn
 				keepCount = tc.KeepCount
 				break
 			}
@@ -63,7 +64,7 @@ func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, im
 		for p.HasMorePages() {
 			r, err := p.NextPage(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			versions = append(versions, r.Versions...)
 		}
@@ -79,21 +80,19 @@ func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig, im
 				FunctionName: v.FunctionArn,
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
-			img := aws.ToString(f.Code.ImageUri)
-			if img == "" {
+			u := ImageURI(aws.ToString(f.Code.ImageUri))
+			if u == "" {
 				continue
 			}
-			log.Println("[debug] ImageUri", img)
-			if images[img] == nil {
-				images[img] = newSet()
+			log.Println("[debug] ImageUri", u)
+			if images.Add(u, aws.ToString(v.FunctionArn)) {
+				log.Printf("[info] %s is in use by Lambda function %s:%s", u.Short(), *v.FunctionName, *v.Version)
 			}
-			log.Printf("[info] %s is in use by Lambda function %s:%s", img, *v.FunctionName, *v.Version)
-			images[img].add(*v.FunctionArn)
 		}
 	}
-	return nil
+	return images, nil
 }
 
 func lambdaVersionInt64(v string) int64 {

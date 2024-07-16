@@ -6,8 +6,17 @@ func newSet() set {
 	return make(map[string]struct{})
 }
 
-func (s set) add(v string) {
+func (s set) add(v string) bool {
+	if _, ok := s[v]; ok {
+		return true
+	}
 	s[v] = struct{}{}
+	return false
+}
+
+func (s set) contains(v string) bool {
+	_, ok := s[v]
+	return ok
 }
 
 func (s set) remove(v string) {
@@ -15,6 +24,9 @@ func (s set) remove(v string) {
 }
 
 func (s set) isEmpty() bool {
+	if s == nil {
+		return true
+	}
 	return len(s) == 0
 }
 
@@ -24,4 +36,18 @@ func (s set) members() []string {
 		members = append(members, k)
 	}
 	return members
+}
+
+func (s set) union(o set) set {
+	if o == nil {
+		return s
+	}
+	u := newSet()
+	for k := range s {
+		u.add(k)
+	}
+	for k := range o {
+		u.add(k)
+	}
+	return u
 }

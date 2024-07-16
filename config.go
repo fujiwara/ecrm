@@ -81,12 +81,14 @@ func (c *ClusterConfig) Match(name string) bool {
 	return wildcard.Match(c.NamePattern, name)
 }
 
+type RepositoryName string
+
 type RepositoryConfig struct {
-	Name            string   `yaml:"name,omitempty"`
-	NamePattern     string   `yaml:"name_pattern,omitempty"`
-	Expires         string   `yaml:"expires,omitempty"`
-	KeepCount       int64    `yaml:"keep_count,omitempty"`
-	KeepTagPatterns []string `yaml:"keep_tag_patterns,omitempty"`
+	Name            RepositoryName `yaml:"name,omitempty"`
+	NamePattern     string         `yaml:"name_pattern,omitempty"`
+	Expires         string         `yaml:"expires,omitempty"`
+	KeepCount       int64          `yaml:"keep_count,omitempty"`
+	KeepTagPatterns []string       `yaml:"keep_tag_patterns,omitempty"`
 
 	expireBefore time.Time
 }
@@ -117,11 +119,11 @@ func (r *RepositoryConfig) Validate() error {
 	return nil
 }
 
-func (r *RepositoryConfig) MatchName(name string) bool {
+func (r *RepositoryConfig) MatchName(name RepositoryName) bool {
 	if r.Name == name {
 		return true
 	}
-	return wildcard.Match(r.NamePattern, name)
+	return wildcard.Match(r.NamePattern, string(name))
 }
 
 func (r *RepositoryConfig) MatchTag(tag string) bool {
