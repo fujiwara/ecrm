@@ -186,8 +186,9 @@ func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (Ima
 			return nil, err
 		}
 		for _, id := range ids {
-			log.Printf("[info] %s is in use by task definition %s", id.Short(), tds)
-			images.Add(id, tds)
+			if images.Add(id, tds) {
+				log.Printf("[info] %s is in use by task definition %s", id.Short(), tds)
+			}
 		}
 	}
 	return images, nil
@@ -595,14 +596,16 @@ func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn stri
 				}
 				// ECR image
 				if u.IsDigestURI() {
-					log.Printf("[info] %s is used by %s container on %s/%s", u.Short(), *c.Name, *task.TaskArn, clusterName)
-					images.Add(u, tdArn)
+					if images.Add(u, tdArn) {
+						log.Printf("[info] %s is used by %s container on %s", u.Short(), *c.Name, *task.TaskArn)
+					}
 				} else {
 					base := u.Base()
 					digest := aws.ToString(c.ImageDigest)
 					u := ImageURI(base + "@" + digest)
-					log.Printf("[info] %s is used by %s container on %s/%s", u.Short(), *c.Name, *task.TaskArn, clusterName)
-					images.Add(u, tdArn)
+					if images.Add(u, tdArn) {
+						log.Printf("[info] %s is used by %s container on %s", u.Short(), *c.Name, *task.TaskArn)
+					}
 				}
 			}
 		}
