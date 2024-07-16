@@ -2,28 +2,59 @@ package ecrm
 
 import "strings"
 
-// ImageID is a type of ID of an ECR image.
-type ImageID string
+// ImageURI represents an image URI.
+type ImageURI string
 
-func (id ImageID) String() string {
-	return string(id)
+func (u ImageURI) IsECRImage() bool {
+	return strings.Contains(string(u), ".dkr.ecr.")
 }
 
-func (id ImageID) Short() string {
-	return strings.SplitN(string(id), "/", 2)[1]
+func (u ImageURI) IsDigestURI() bool {
+	return strings.Contains(string(u), "@")
 }
 
-type Images map[ImageID]set
-
-func (i Images) Add(id ImageID, usedBy string) bool {
-	if _, ok := i[id]; !ok {
-		i[id] = newSet()
+func (u ImageURI) Tag() string {
+	if u.IsDigestURI() {
+		return ""
 	}
-	return i[id].add(usedBy)
+	s := strings.SplitN(string(u), ":", 2)
+	if len(s) == 2 {
+		return s[1]
+	}
+	return ""
 }
 
-func (i Images) Contains(id ImageID) bool {
-	return !i[id].isEmpty()
+func (u ImageURI) Base() string {
+	if u.IsDigestURI() {
+		s := strings.SplitN(string(u), "@", 2)
+		return s[0]
+	} else if strings.Contains(string(u), ":") {
+		s := strings.SplitN(string(u), ":", 2)
+		return s[0]
+	} else {
+		return string(u)
+	}
+}
+
+func (u ImageURI) String() string {
+	return string(u)
+}
+
+func (u ImageURI) Short() string {
+	return strings.SplitN(string(u), "/", 2)[1]
+}
+
+type Images map[ImageURI]set
+
+func (i Images) Add(u ImageURI, usedBy string) bool {
+	if _, ok := i[u]; !ok {
+		i[u] = newSet()
+	}
+	return i[u].add(usedBy)
+}
+
+func (i Images) Contains(u ImageURI) bool {
+	return !i[u].isEmpty()
 }
 
 func (i Images) Merge(j Images) {

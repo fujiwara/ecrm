@@ -82,13 +82,13 @@ func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) (I
 			if err != nil {
 				return nil, err
 			}
-			id := ImageID(aws.ToString(f.Code.ImageUri))
-			if id == "" {
+			u := ImageURI(aws.ToString(f.Code.ImageUri))
+			if u == "" {
 				continue
 			}
-			log.Println("[debug] ImageUri", id)
-			images.Add(id, aws.ToString(v.FunctionArn))
-			log.Printf("[info] %s is in use by Lambda function %s:%s", id.Short(), *v.FunctionName, *v.Version)
+			log.Println("[debug] ImageUri", u)
+			images.Add(u, aws.ToString(v.FunctionArn))
+			log.Printf("[info] %s is in use by Lambda function %s:%s", u.Short(), *v.FunctionName, *v.Version)
 		}
 	}
 	return images, nil

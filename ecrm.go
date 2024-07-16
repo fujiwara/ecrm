@@ -305,8 +305,8 @@ IMAGE:
 		sums.Add(d)
 
 		// Check if the image is in use (digest)
-		imageArnSha256 := ImageID(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest))
-		if holdImages.Contains(imageArnSha256) {
+		imageURISha256 := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest))
+		if holdImages.Contains(imageURISha256) {
 			log.Printf("[info] %s@%s is in used, keep it", repo, *d.ImageDigest)
 			continue IMAGE
 		}
@@ -317,8 +317,8 @@ IMAGE:
 				log.Printf("[info] %s:%s is matched by tag condition, keep it", repo, tag)
 				continue IMAGE
 			}
-			imageArn := ImageID(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag))
-			if holdImages.Contains(imageArn) {
+			imageURI := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag))
+			if holdImages.Contains(imageURI) {
 				log.Printf("[info] %s:%s is in used, keep it", repo, tag)
 				continue IMAGE
 			}
@@ -542,8 +542,8 @@ func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskd
 	return tds, nil
 }
 
-func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageID, error) {
-	images := make([]ImageID, 0)
+func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageURI, error) {
+	images := make([]ImageURI, 0)
 	out, err := app.ecs.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{
 		TaskDefinition: &tdName,
 	})
@@ -551,11 +551,11 @@ func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageID, 
 		return nil, err
 	}
 	for _, container := range out.TaskDefinition.ContainerDefinitions {
-		img := *container.Image
-		if strings.Contains(img, ".dkr.ecr.") {
-			images = append(images, ImageID(*container.Image))
+		u := ImageURI(*container.Image)
+		if u.IsECRImage() {
+			images = append(images, u)
 		} else {
-			log.Printf("[debug] Skipping non ECR image %s", img)
+			log.Printf("[debug] Skipping non ECR image %s", u)
 		}
 	}
 	return images, nil
@@ -588,19 +588,23 @@ func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn stri
 			if tdArns.add(tdArn) {
 				log.Printf("[info] %s is used by tasks in %s", tdArn, clusterName)
 			}
-			/*
-				for _, c := range task.Containers {
-					img := aws.ToString(c.Image)
-					if strings.Contains(img, ".dkr.ecr.") {
-						images.Add(ImageID(img), tdArn)
-						if p := strings.SplitN(img, ":", 2); len(p) == 2 { // image with tag
-							base := p[0]
-							digest := aws.ToString(c.ImageDigest)
-							images.Add(ImageID(base+"@"+digest), tdArn)
-						}
-					}
+			for _, c := range task.Containers {
+				u := ImageURI(aws.ToString(c.Image))
+				if !u.IsECRImage() {
+					continue
 				}
-			*/
+				// ECR image
+				if u.IsDigestURI() {
+					log.Printf("[info] %s is used by %s container on %s/%s", u.Short(), *c.Name, *task.TaskArn, clusterName)
+					images.Add(u, tdArn)
+				} else {
+					base := u.Base()
+					digest := aws.ToString(c.ImageDigest)
+					u := ImageURI(base + "@" + digest)
+					log.Printf("[info] %s is used by %s container on %s/%s", u.Short(), *c.Name, *task.TaskArn, clusterName)
+					images.Add(u, tdArn)
+				}
+			}
 		}
 	}
 
