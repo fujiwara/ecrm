@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,41 +37,6 @@ type App struct {
 	ecs    *ecs.Client
 	lambda *lambda.Client
 	region string
-}
-
-type taskdef struct {
-	name     string
-	revision int
-}
-
-func (td taskdef) String() string {
-	return fmt.Sprintf("%s:%d", td.name, td.revision)
-}
-
-func parseTaskdefArn(s string) (taskdef, error) {
-	a, err := arn.Parse(s)
-	if err != nil {
-		return taskdef{}, err
-	}
-	if a.Service != "ecs" {
-		return taskdef{}, errors.New("not an ECS task definition ARN")
-	}
-	p := strings.SplitN(a.Resource, "/", 2)
-	if len(p) != 2 {
-		return taskdef{}, errors.New("invalid task definition ARN")
-	}
-	if p[0] != "task-definition" {
-		return taskdef{}, errors.New("not a task definition ARN")
-	}
-	nr := strings.SplitN(p[1], ":", 2)
-	if len(nr) != 2 {
-		return taskdef{}, errors.New("invalid task definition name")
-	}
-	rev, err := strconv.Atoi(nr[1])
-	if err != nil {
-		return taskdef{}, err
-	}
-	return taskdef{name: nr[0], revision: rev}, nil
 }
 
 type Option struct {
@@ -187,7 +151,7 @@ func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (Ima
 		}
 		for _, id := range ids {
 			if images.Add(id, tds) {
-				log.Printf("[info] %s is in use by task definition %s", id.Short(), tds)
+				log.Printf("[info] image %s is in use by taskdef %s", id.Short(), tds)
 			}
 		}
 	}
@@ -307,6 +271,7 @@ IMAGE:
 
 		// Check if the image is in use (digest)
 		imageURISha256 := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest))
+		log.Printf("[debug] checking %s", imageURISha256)
 		if holdImages.Contains(imageURISha256) {
 			log.Printf("[info] %s@%s is in used, keep it", repo, *d.ImageDigest)
 			continue IMAGE
@@ -315,31 +280,32 @@ IMAGE:
 		// Check if the image is in use or conditions (tag)
 		for _, tag := range d.ImageTags {
 			if rc.MatchTag(tag) {
-				log.Printf("[info] %s:%s is matched by tag condition, keep it", repo, tag)
+				log.Printf("[info] image %s:%s is matched by tag condition, keep it", repo, tag)
 				continue IMAGE
 			}
 			imageURI := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag))
+			log.Printf("[debug] checking %s", imageURI)
 			if holdImages.Contains(imageURI) {
-				log.Printf("[info] %s:%s is in used, keep it", repo, tag)
+				log.Printf("[info] image %s:%s is in used, keep it", repo, tag)
 				continue IMAGE
 			}
 		}
 
 		pushedAt := *d.ImagePushedAt
 		if !rc.IsExpired(pushedAt) {
-			log.Println("[info]", displayName, "is not expired, keep it")
+			log.Printf("[info] image %s is not expired, keep it", displayName)
 			continue IMAGE
 		}
 		if tagged {
 			keepCount++
 			if keepCount <= rc.KeepCount {
-				log.Printf("[info] %s is in keep_count %d <= %d, keep it", displayName, keepCount, rc.KeepCount)
+				log.Printf("[info] image %s is in keep_count %d <= %d, keep it", displayName, keepCount, rc.KeepCount)
 				continue IMAGE
 			}
 		}
 
 		// Don't match any conditions, so expired
-		log.Printf("[notice] %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
+		log.Printf("[notice] image %s is expired %s %s", displayName, *d.ImageDigest, pushedAt.Format(time.RFC3339))
 		expiredIds = append(expiredIds, ecrTypes.ImageIdentifier{ImageDigest: d.ImageDigest})
 		sums.Expire(d)
 
@@ -500,7 +466,7 @@ func (app *App) scanClusters(ctx context.Context, clustersConfigs []*ClusterConf
 			images.Merge(_imgs)
 		}
 	}
-	return tds, nil, nil
+	return tds, images, nil
 }
 
 func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskdef, error) {
@@ -586,8 +552,16 @@ func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn stri
 		}
 		for _, task := range tasks.Tasks {
 			tdArn := aws.ToString(task.TaskDefinitionArn)
+			td, err := parseTaskdefArn(tdArn)
+			if err != nil {
+				return nil, nil, err
+			}
+			ts, err := arn.Parse(*task.TaskArn)
+			if err != nil {
+				return nil, nil, err
+			}
 			if tdArns.add(tdArn) {
-				log.Printf("[info] %s is used by tasks in %s", tdArn, clusterName)
+				log.Printf("[info] taskdef %s is used by %s", td.String(), ts.Resource)
 			}
 			for _, c := range task.Containers {
 				u := ImageURI(aws.ToString(c.Image))
@@ -597,14 +571,14 @@ func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn stri
 				// ECR image
 				if u.IsDigestURI() {
 					if images.Add(u, tdArn) {
-						log.Printf("[info] %s is used by %s container on %s", u.Short(), *c.Name, *task.TaskArn)
+						log.Printf("[info] image %s is used by %s container on %s", u.String(), *c.Name, ts.Resource)
 					}
 				} else {
 					base := u.Base()
 					digest := aws.ToString(c.ImageDigest)
 					u := ImageURI(base + "@" + digest)
 					if images.Add(u, tdArn) {
-						log.Printf("[info] %s is used by %s container on %s", u.Short(), *c.Name, *task.TaskArn)
+						log.Printf("[info] image %s is used by %s container on %s", u.String(), *c.Name, ts.Resource)
 					}
 				}
 			}
@@ -630,9 +604,13 @@ func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn stri
 		for _, sv := range svs.Services {
 			log.Printf("[debug] Checking service %s", *sv.ServiceName)
 			for _, dp := range sv.Deployments {
-				a := aws.ToString(dp.TaskDefinition)
-				if tdArns.add(a) {
-					log.Printf("[info] %s is used by %s deployment on %s/%s", a, *dp.Status, *sv.ServiceName, clusterName)
+				tdArn := aws.ToString(dp.TaskDefinition)
+				td, err := parseTaskdefArn(tdArn)
+				if err != nil {
+					return nil, nil, err
+				}
+				if tdArns.add(tdArn) {
+					log.Printf("[info] taskdef %s is used by %s deployment on service %s/%s", td.String(), *dp.Status, *sv.ServiceName, clusterName)
 				}
 			}
 		}
