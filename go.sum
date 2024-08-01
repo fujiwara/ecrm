@@ -47,8 +47,8 @@ github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25Kn
 github.com/fatih/color v1.10.0/go.mod h1:ELkj/draVOlAH/xkhN6mQ50Qd0MPOk5AAr3maGEBuJM=
 github.com/fatih/color v1.17.0 h1:GlRw1BRJxkpqUCBKzKOw098ed57fEsKeNjpTe3cSjK4=
 github.com/fatih/color v1.17.0/go.mod h1:YZ7TlrGPkiz6ku9fK3TLD/pl3CpsiFyu8N92HLgmosI=
-github.com/fujiwara/logutils v1.1.0 h1:JAYmqW40d/ZjzouB01sfZiaTxwNe4hwmB6lLajZqm1s=
-github.com/fujiwara/logutils v1.1.0/go.mod h1:pdb/Uk70rjQWEmFm/OvYH7OG8meZt1fEIqC0qZbvro4=
+github.com/fujiwara/logutils v1.1.2 h1:nYVRyTj+5SyCvpZUrYIZU4kubqNycGTxFXMKJBKe0Sg=
+github.com/fujiwara/logutils v1.1.2/go.mod h1:pdb/Uk70rjQWEmFm/OvYH7OG8meZt1fEIqC0qZbvro4=
 github.com/go-playground/assert/v2 v2.0.1/go.mod h1:VDjEfimB/XKnb+ZQfWdccd7VUvScMdVu0Titje2rxJ4=
 github.com/go-playground/locales v0.13.0 h1:HyWk6mgj5qFqCT5fjGBuRArbVDfE4hi8+e8ceBS/t7Q=
 github.com/go-playground/locales v0.13.0/go.mod h1:taPMhCMXrRLJO55olJkUXHZBHCxTMfnGwq/HNwmWNS8=
