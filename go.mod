@@ -15,7 +15,7 @@ require (
 	github.com/fujiwara/logutils v1.1.0
 	github.com/goccy/go-yaml v1.9.4
 	github.com/google/go-containerregistry v0.20.0
-	github.com/k1LoW/duration v1.1.0
+	github.com/k1LoW/duration v1.2.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/samber/lo v1.26.0
