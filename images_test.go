@@ -61,6 +61,10 @@ func TestImages(t *testing.T) {
 	if !images.Contains("foo") {
 		t.Error("unexpected not contains")
 	}
+	if images.Add("foo", "baz") {
+		// already exists
+		t.Error("unexpected added")
+	}
 
 	j := make(ecrm.Images)
 	j.Add("foo", "qux")

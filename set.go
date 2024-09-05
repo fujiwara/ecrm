@@ -8,10 +8,10 @@ func newSet() set {
 
 func (s set) add(v string) bool {
 	if _, ok := s[v]; ok {
-		return true
+		return false // already exists
 	}
 	s[v] = struct{}{}
-	return false
+	return true // added
 }
 
 func (s set) contains(v string) bool {
