@@ -2,6 +2,7 @@ package ecrm
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -117,46 +118,26 @@ func (c *CLI) RunContext(ctx context.Context) error {
 		return c.app.Run(ctx, c.Config, Option{
 			Delete:     false,
 			Repository: c.Plan.Repository,
-			NoColor:    !c.Color,
 			Format:     newOutputFormatFrom(c.Format),
 		})
 	case "generate":
-		return c.app.GenerateConfig(ctx, c.Config, Option{
-			NoColor: !c.Color,
-		})
+		return c.app.GenerateConfig(ctx, c.Config, Option{})
 	case "delete":
 		return c.app.Run(ctx, c.Config, Option{
 			Delete:     true,
 			Force:      c.Delete.Force,
 			Repository: c.Delete.Repository,
-			NoColor:    !c.Color,
 			Format:     newOutputFormatFrom(c.Format),
 		})
+	default:
+		return fmt.Errorf("unknown command: %s", c.command)
 	}
-
-	return nil
 }
 
-func (app *App) NewLambdaAction() func() error {
-	return func() error {
-		return nil
-		/*
-			subcommand := os.Getenv("ECRM_COMMAND")
-			lambda.Start(func() error {
-				format := newOutputFormatFrom(c.String("format"))
-				return app.Run(
-					c.Context,
-					c.String("config"),
-					Option{
-						Delete:     subcommand == "delete",
-						Force:      subcommand == "delete", //If it works as bootstrap for a Lambda function, delete images without confirmation.
-						Repository: os.Getenv("ECRM_REPOSITORY"),
-						NoColor:    c.Bool("no-color"),
-						Format:     format,
-					},
-				)
-			})
-			return nil
-		*/
+func (c *CLI) NewLambdaHandler() func(context.Context) error {
+	return func(ctx context.Context) error {
+		c.Color = false // disable color output for Lambda
+		c.command = os.Getenv("ECRM_COMMAND")
+		return c.RunContext(ctx)
 	}
 }

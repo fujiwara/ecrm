@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 )
@@ -119,10 +120,10 @@ const (
 
 type SummaryTable []*Summary
 
-func (s *SummaryTable) print(w io.Writer, noColor bool, format outputFormat) error {
+func (s *SummaryTable) print(w io.Writer, format outputFormat) error {
 	switch format {
 	case formatTable:
-		return s.printTable(w, noColor)
+		return s.printTable(w)
 	case formatJSON:
 		return s.printJSON(w)
 	default:
@@ -139,7 +140,7 @@ func (s SummaryTable) printJSON(w io.Writer) error {
 	return enc.Encode(ss)
 }
 
-func (s SummaryTable) printTable(w io.Writer, noColor bool) error {
+func (s SummaryTable) printTable(w io.Writer) error {
 	t := tablewriter.NewWriter(w)
 	t.SetHeader(s.header())
 	t.SetBorder(false)
@@ -157,7 +158,7 @@ func (s SummaryTable) printTable(w io.Writer, noColor bool) error {
 		if strings.HasPrefix(row[4], "0 ") {
 			colors[4] = tablewriter.Colors{tablewriter.FgYellowColor}
 		}
-		if noColor {
+		if color.NoColor {
 			t.Append(row)
 		} else {
 			t.Rich(row, colors)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/fujiwara/ecrm"
 )
 
@@ -20,7 +21,9 @@ func main() {
 	app.Version = version
 	cli := app.NewCLI()
 	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
-		// cliApp.Action = app.NewLambdaAction()
+		handler := cli.NewLambdaHandler()
+		lambda.Start(handler)
+		panic("unreachable here")
 	}
 	if err := cli.RunContext(ctx); err != nil {
 		log.Fatal(err)

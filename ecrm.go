@@ -45,7 +45,6 @@ type Option struct {
 	Delete     bool
 	Force      bool
 	Repository string
-	NoColor    bool
 	Format     outputFormat
 }
 
@@ -219,7 +218,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, h
 	sort.SliceStable(sums, func(i, j int) bool {
 		return sums[i].Repo < sums[j].Repo
 	})
-	if err := sums.print(os.Stdout, opt.NoColor, opt.Format); err != nil {
+	if err := sums.print(os.Stdout, opt.Format); err != nil {
 		return nil, err
 	}
 	return idsMaps, nil
