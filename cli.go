@@ -45,31 +45,6 @@ func SetLogLevel(level string) {
 	log.Println("[debug] Setting log level to", level)
 }
 
-/*
-NAME:
-   ecrm - A command line tool for managing ECR repositories
-
-USAGE:
-   ecrm [global options] command [command options] [arguments...]
-
-VERSION:
-   current
-
-COMMANDS:
-   delete    Scan ECS/Lambda resources and delete unused ECR images.
-   generate  Generate ecrm.yaml
-   plan      Scan ECS/Lambda resources and find unused ECR images to delete safety.
-   help, h   Shows a list of commands or help for one command
-
-GLOBAL OPTIONS:
-   --config FILE, -c FILE  Load configuration from FILE (default: "ecrm.yaml") [$ECRM_CONFIG]
-   --format value          plan output format (table, json) (default: "table") [$ECRM_FORMAT]
-   --log-level value       Set log level (debug, info, notice, warn, error) (default: "info") [$ECRM_LOG_LEVEL]
-   --no-color              Whether or not to color the output (default: false) [$ECRM_NO_COLOR]
-   --help, -h              show help (default: false)
-   --version, -v           print the version (default: false)
-*/
-
 type CLI struct {
 	Config   string `help:"Load configuration from FILE" short:"c" default:"ecrm.yaml" env:"ECRM_CONFIG"`
 	LogLevel string `help:"Set log level (debug, info, notice, warn, error)" default:"info" env:"ECRM_LOG_LEVEL"`
