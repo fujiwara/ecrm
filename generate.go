@@ -65,14 +65,14 @@ func (app *App) generateClusterConfig(ctx context.Context, config *Config) error
 	if err != nil {
 		return err
 	}
-	clusterNames := make(map[string]struct{}, len(clusters))
+	clusterNames := newSet()
 	for _, c := range clusters {
 		name := clusterArnToName(c)
 		pattern := nameToPattern(name)
-		clusterNames[pattern] = struct{}{}
+		clusterNames.add(pattern)
 		log.Printf("[debug] cluster %s -> %s", name, pattern)
 	}
-	for name := range clusterNames {
+	for _, name := range clusterNames.members() {
 		cfg := ClusterConfig{}
 		if strings.Contains(name, "*") {
 			cfg.NamePattern = name
@@ -95,14 +95,14 @@ func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error
 	if err != nil {
 		return err
 	}
-	taskdefNames := make(map[string]struct{}, len(taskdefs))
+	taskdefNames := newSet()
 	for _, n := range taskdefs {
 		name := arnToName(n, "")
 		pattern := nameToPattern(name)
-		taskdefNames[pattern] = struct{}{}
+		taskdefNames.add(pattern)
 		log.Printf("[debug] taskdef %s -> %s", name, pattern)
 	}
-	for name := range taskdefNames {
+	for _, name := range taskdefNames.members() {
 		cfg := TaskdefConfig{
 			KeepCount: int64(DefaultKeepCount),
 		}
@@ -127,14 +127,14 @@ func (app *App) generateLambdaConfig(ctx context.Context, config *Config) error 
 	if err != nil {
 		return err
 	}
-	lambdaNames := make(map[string]struct{}, len(lambdas))
+	lambdaNames := newSet()
 	for _, c := range lambdas {
 		name := arnToName(*c.FunctionName, "")
 		pattern := nameToPattern(name)
-		lambdaNames[pattern] = struct{}{}
+		lambdaNames.add(pattern)
 		log.Printf("[debug] lambda %s -> %s", name, pattern)
 	}
-	for name := range lambdaNames {
+	for _, name := range lambdaNames.members() {
 		cfg := LambdaConfig{
 			KeepCount:  int64(DefaultKeepCount),
 			KeepAliase: true,
@@ -160,14 +160,14 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 	if err != nil {
 		return err
 	}
-	repoNames := make(map[string]struct{}, len(repos))
+	repoNames := newSet()
 	for _, r := range repos {
 		name := arnToName(*r.RepositoryName, "")
 		pattern := nameToPattern(name)
-		repoNames[pattern] = struct{}{}
+		repoNames.add(pattern)
 		log.Printf("[debug] ECR %s -> %s", name, pattern)
 	}
-	for name := range repoNames {
+	for _, name := range repoNames.members() {
 		cfg := RepositoryConfig{
 			KeepCount:       int64(DefaultKeepCount),
 			Expires:         DefaultExpiresStr,
@@ -176,7 +176,7 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 		if strings.Contains(name, "*") {
 			cfg.NamePattern = name
 		} else {
-			cfg.Name = name
+			cfg.Name = RepositoryName(name)
 		}
 		config.Repositories = append(config.Repositories, &cfg)
 	}
@@ -192,7 +192,7 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 func (app *App) NewGenerateCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "generate",
-		Usage: "Genarete ecrm.yaml",
+		Usage: "Generate ecrm.yaml",
 		Action: func(c *cli.Context) error {
 			return app.GenerateConfig(
 				c.Context,
