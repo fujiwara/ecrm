@@ -17,12 +17,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cliApp := app.NewCLI()
-	cliApp.Version = version
+	app.Version = version
+	cli := app.NewCLI()
 	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
-		cliApp.Action = app.NewLambdaAction()
+		// cliApp.Action = app.NewLambdaAction()
 	}
-	if err := cliApp.RunContext(ctx, os.Args); err != nil {
+	if err := cli.RunContext(ctx); err != nil {
 		log.Fatal(err)
 	}
 }
