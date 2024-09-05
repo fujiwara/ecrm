@@ -33,6 +33,8 @@ const (
 var untaggedStr = "__UNTAGGED__"
 
 type App struct {
+	Version string
+
 	ecr    *ecr.Client
 	ecs    *ecs.Client
 	lambda *lambda.Client

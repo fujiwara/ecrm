@@ -88,14 +88,14 @@ func (s *Summary) row() []string {
 	}
 }
 
-func newOutputFormatFrom(s string) (outputFormat, error) {
+func newOutputFormatFrom(s string) outputFormat {
 	switch s {
 	case "table":
-		return formatTable, nil
+		return formatTable
 	case "json":
-		return formatJSON, nil
+		return formatJSON
 	default:
-		return outputFormat(0), fmt.Errorf("invalid format name: %s", s)
+		panic(fmt.Sprintf("invalid format name: %s", s))
 	}
 }
 
