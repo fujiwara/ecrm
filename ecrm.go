@@ -280,21 +280,6 @@ IMAGE:
 		displayName := string(repo) + ":" + tag
 		sums.Add(d)
 
-		// Check if the image is expired
-		pushedAt := *d.ImagePushedAt
-		if !rc.IsExpired(pushedAt) {
-			log.Printf("[info] image %s is not expired, keep it", displayName)
-			continue IMAGE
-		}
-
-		if tagged {
-			keepCount++
-			if keepCount <= rc.KeepCount {
-				log.Printf("[info] image %s is in keep_count %d <= %d, keep it", displayName, keepCount, rc.KeepCount)
-				continue IMAGE
-			}
-		}
-
 		// Check if the image is in use (digest)
 		imageURISha256 := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest))
 		log.Printf("[debug] checking %s", imageURISha256)
@@ -313,6 +298,21 @@ IMAGE:
 			log.Printf("[debug] checking %s", imageURI)
 			if holdImages.Contains(imageURI) {
 				log.Printf("[info] image %s:%s is in used, keep it", repo, tag)
+				continue IMAGE
+			}
+		}
+
+		// Check if the image is expired
+		pushedAt := *d.ImagePushedAt
+		if !rc.IsExpired(pushedAt) {
+			log.Printf("[info] image %s is not expired, keep it", displayName)
+			continue IMAGE
+		}
+
+		if tagged {
+			keepCount++
+			if keepCount <= rc.KeepCount {
+				log.Printf("[info] image %s is in keep_count %d <= %d, keep it", displayName, keepCount, rc.KeepCount)
 				continue IMAGE
 			}
 		}
