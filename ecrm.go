@@ -94,6 +94,7 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 		return err
 	}
 
+	// collect images in use by ECS tasks / task definitions
 	var taskdefs []taskdef
 	holdImages := make(Images)
 	if tds, imgs, err := app.scanClusters(ctx, c.Clusters); err != nil {
@@ -102,23 +103,25 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 		taskdefs = append(taskdefs, tds...)
 		holdImages.Merge(imgs)
 	}
-	if tds, err := app.scanTaskdefs(ctx, c.TaskDefinitions); err != nil {
+	if tds, err := app.collectTaskdefs(ctx, c.TaskDefinitions); err != nil {
 		return err
 	} else {
 		taskdefs = append(taskdefs, tds...)
 	}
-	if imgs, err := app.aggregateECRImages(ctx, taskdefs); err != nil {
+	if imgs, err := app.collectImages(ctx, taskdefs); err != nil {
 		return err
 	} else {
 		holdImages.Merge(imgs)
 	}
 
+	// collect images in use by lambda functions
 	if imgs, err := app.scanLambdaFunctions(ctx, c.LambdaFunctions); err != nil {
 		return err
 	} else {
 		holdImages.Merge(imgs)
 	}
 
+	// find candidates to delete
 	candidates, err := app.scanRepositories(ctx, c.Repositories, holdImages, opt)
 	if err != nil {
 		return err
@@ -135,7 +138,8 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 	return nil
 }
 
-func (app *App) aggregateECRImages(ctx context.Context, taskdefs []taskdef) (Images, error) {
+// collectImages collects images in use by ECS tasks / task definitions
+func (app *App) collectImages(ctx context.Context, taskdefs []taskdef) (Images, error) {
 	images := make(Images)
 	dup := newSet()
 	for _, td := range taskdefs {
@@ -173,6 +177,9 @@ func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error)
 
 type deletableImageIDs map[RepositoryName][]ecrTypes.ImageIdentifier
 
+// scanRepositories scans repositories and find expired images
+// holdImages is a set of images in use by ECS tasks / task definitions / lambda functions
+// so that they are not deleted
 func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, holdImages Images, opt Option) (deletableImageIDs, error) {
 	idsMaps := make(deletableImageIDs)
 	sums := SummaryTable{}
@@ -219,6 +226,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, h
 const batchDeleteImageIdsLimit = 100
 const batchGetImageLimit = 100
 
+// DeleteImages deletes images from the repository
 func (app *App) DeleteImages(ctx context.Context, repo RepositoryName, ids []ecrTypes.ImageIdentifier, opt Option) error {
 	if len(ids) == 0 {
 		log.Println("[info] no need to delete images on", repo)
@@ -255,6 +263,7 @@ func (app *App) DeleteImages(ctx context.Context, repo RepositoryName, ids []ecr
 	return nil
 }
 
+// unusedImageIdentifiers finds image identifiers(by image digests) from the repository.
 func (app *App) unusedImageIdentifiers(ctx context.Context, repo RepositoryName, rc *RepositoryConfig, holdImages Images) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
 	sums := NewRepoSummary(repo)
 	images, imageIndexes, sociIndexes, idByTags, err := app.listImageDetails(ctx, repo)
@@ -442,6 +451,7 @@ func imageTag(d ecrTypes.ImageDetail) (string, bool) {
 	}
 }
 
+// scanClusters scans ECS clusters and returns task definitions and images in use
 func (app *App) scanClusters(ctx context.Context, clustersConfigs []*ClusterConfig) ([]taskdef, Images, error) {
 	tds := make([]taskdef, 0)
 	images := make(Images)
@@ -473,7 +483,8 @@ func (app *App) scanClusters(ctx context.Context, clustersConfigs []*ClusterConf
 	return tds, images, nil
 }
 
-func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskdef, error) {
+// collectTaskdefs collects task definitions by configurations
+func (app *App) collectTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskdef, error) {
 	tds := make([]taskdef, 0)
 	families, err := app.taskDefinitionFamilies(ctx)
 	if err != nil {
@@ -513,6 +524,8 @@ func (app *App) scanTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskd
 	return tds, nil
 }
 
+// extractECRImages extracts images (only in ECR) from the task definition
+// returns image URIs
 func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageURI, error) {
 	images := make([]ImageURI, 0)
 	out, err := app.ecs.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{
@@ -532,6 +545,7 @@ func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageURI,
 	return images, nil
 }
 
+// availableResourcesInCluster scans task definitions and images in use in the cluster
 func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn string) ([]taskdef, Images, error) {
 	clusterName := clusterArnToName(clusterArn)
 	tdArns := make(set)
