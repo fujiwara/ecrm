@@ -95,12 +95,12 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 	}
 
 	var taskdefs []taskdef
-	images := make(Images)
+	holdImages := make(Images)
 	if tds, imgs, err := app.scanClusters(ctx, c.Clusters); err != nil {
 		return err
 	} else {
 		taskdefs = append(taskdefs, tds...)
-		images.Merge(imgs)
+		holdImages.Merge(imgs)
 	}
 	if tds, err := app.scanTaskdefs(ctx, c.TaskDefinitions); err != nil {
 		return err
@@ -110,23 +110,23 @@ func (app *App) Run(ctx context.Context, path string, opt Option) error {
 	if imgs, err := app.aggregateECRImages(ctx, taskdefs); err != nil {
 		return err
 	} else {
-		images.Merge(imgs)
+		holdImages.Merge(imgs)
 	}
 
 	if imgs, err := app.scanLambdaFunctions(ctx, c.LambdaFunctions); err != nil {
 		return err
 	} else {
-		images.Merge(imgs)
+		holdImages.Merge(imgs)
 	}
 
-	idsMaps, err := app.scanRepositories(ctx, c.Repositories, images, opt)
+	candidates, err := app.scanRepositories(ctx, c.Repositories, holdImages, opt)
 	if err != nil {
 		return err
 	}
 	if !opt.Delete {
 		return nil
 	}
-	for name, ids := range idsMaps {
+	for name, ids := range candidates {
 		if err := app.DeleteImages(ctx, name, ids, opt); err != nil {
 			return err
 		}
@@ -171,8 +171,10 @@ func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error)
 	return repos, nil
 }
 
-func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, images Images, opt Option) (map[RepositoryName][]ecrTypes.ImageIdentifier, error) {
-	idsMaps := make(map[RepositoryName][]ecrTypes.ImageIdentifier)
+type deletableImageIDs map[RepositoryName][]ecrTypes.ImageIdentifier
+
+func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, holdImages Images, opt Option) (deletableImageIDs, error) {
+	idsMaps := make(deletableImageIDs)
 	sums := SummaryTable{}
 	in := &ecr.DescribeRepositoriesInput{}
 	if opt.Repository != "" {
@@ -197,12 +199,12 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, i
 			if rc == nil {
 				continue REPO
 			}
-			ids, sum, err := app.unusedImageIdentifiers(ctx, name, rc, images)
+			imageIDs, sum, err := app.unusedImageIdentifiers(ctx, name, rc, holdImages)
 			if err != nil {
 				return nil, err
 			}
 			sums = append(sums, sum...)
-			idsMaps[name] = ids
+			idsMaps[name] = imageIDs
 		}
 	}
 	sort.SliceStable(sums, func(i, j int) bool {
