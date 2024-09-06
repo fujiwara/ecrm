@@ -7,30 +7,32 @@ ecrm can delete "unused" images safety.
 "unused" means,
 
 - Images not specified in running tasks in ECS clusters.
-- Images not specified in avaliable ECS service deployments.
+- Images not specified in available ECS service deployments.
 - Images not specified in exists ECS task definitions.
 - Images not specified in using Lambda functions (PackageType=Image).
 
 ## Usage
 
 ```
-NAME:
-   ecrm - A command line tool for managing ECR repositories
+Usage: ecrm <command> [flags]
 
-USAGE:
-   ecrm [global options] command [command options] [arguments...]
+Flags:
+  -h, --help                  Show context-sensitive help.
+  -c, --config="ecrm.yaml"    Load configuration from FILE ($ECRM_CONFIG)
+      --log-level="info"      Set log level (debug, info, notice, warn, error) ($ECRM_LOG_LEVEL)
+      --format="table"        plan output format (table, json) ($ECRM_FORMAT)
+      --[no-]color            Whether or not to color the output ($ECRM_COLOR)
+      --version               Show version
 
-COMMANDS:
-   delete    Scan ECS/Lambda resources and delete unused ECR images.
-   generate  Genarete ecrm.yaml
-   plan      Scan ECS/Lambda resources and find unused ECR images to delete safety.
-   help, h   Shows a list of commands or help for one command
+Commands:
+  plan [flags]
+    Scan ECS/Lambda resources and find unused ECR images to delete safety.
 
-GLOBAL OPTIONS:
-   --config FILE, -c FILE  Load configuration from FILE (default: "ecrm.yaml") [$ECRM_CONFIG]
-   --log-level value       Set log level (debug, info, notice, warn, error) (default: "info") [$ECRM_LOG_LEVEL]
-   --no-color              Whether or not to color the output (default: false) [$ECRM_NO_COLOR]
-   --help, -h              show help (default: false)
+  generate [flags]
+    Generate ecrm.yaml
+
+  delete [flags]
+    Scan ECS/Lambda resources and delete unused ECR images.
 ```
 
 ## Configurations
@@ -45,7 +47,7 @@ clusters:
 task_definitions:
   - name: "*"
     keep_count: 3
-lambda_funcions:
+lambda_functions:
   - name: "*"
     keep_count: 3
 repositories:
@@ -59,33 +61,23 @@ repositories:
 
 ### generate command
 
-`ecrm generate` scans ECS, Lambda and ECR resources in an AWS account and generate a configuration file.
+`ecrm generate` scans ECS, Lambda and ECR resources in an AWS account and generates a configuration file.
 
-```console
-$ ecrm generate --help
-NAME:
-   ecrm generate - Genarete ecrm.yaml
+```
+Usage: ecrm generate [flags]
 
-USAGE:
-   ecrm generate [command options] [arguments...]
-
-OPTIONS:
-   --help, -h  show help (default: false)
+Generate ecrm.yaml
 ```
 
 ### plan command
 
 ```console
-$ ecrm plan --help
-NAME:
-   ecrm plan - Scan ECS/Lambda resources and find unused ECR images to delete safety.
+Usage: ecrm plan [flags]
 
-USAGE:
-   ecrm plan [command options] [arguments...]
+Scan ECS/Lambda resources and find unused ECR images to delete safety.
 
-OPTIONS:
-   --format value                          plan output format (table, json) (default: table)
-   --repository REPOSITORY, -r REPOSITORY  plan for only images in REPOSITORY [$ECRM_REPOSITORY]
+Flags:
+  -r, --repository=STRING     plan for only images in REPOSITORY ($ECRM_REPOSITORY)
 ```
 
 `ecrm plan` shows summaries of unused images in ECR.
@@ -105,17 +97,13 @@ $ ecrm plan
 ### delete command
 
 ```console
-$ ecrm delete --help
-NAME:
-   ecrm delete - scan ECS resources and delete unused ECR images.
+Usage: ecrm delete [flags]
 
-USAGE:
-   ecrm delete [command options] [arguments...]
+Scan ECS/Lambda resources and delete unused ECR images.
 
-OPTIONS:
-   --force                                 force delete images without confirmation (default: false) [$ECRM_FORCE]
-   --repository REPOSITORY, -r REPOSITORY  delete only images in REPOSITORY [$ECRM_REPOSITORY]
-   --help, -h                              show help (default: false)
+Flags:
+      --force                 force delete images without confirmation ($ECRM_FORCE)
+  -r, --repository=STRING     delete only images in REPOSITORY ($ECRM_REPOSITORY)
 ```
 
 ## Notes

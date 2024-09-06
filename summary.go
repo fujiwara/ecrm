@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 )
@@ -88,14 +89,14 @@ func (s *Summary) row() []string {
 	}
 }
 
-func newOutputFormatFrom(s string) (outputFormat, error) {
+func newOutputFormatFrom(s string) outputFormat {
 	switch s {
 	case "table":
-		return formatTable, nil
+		return formatTable
 	case "json":
-		return formatJSON, nil
+		return formatJSON
 	default:
-		return outputFormat(0), fmt.Errorf("invalid format name: %s", s)
+		panic(fmt.Sprintf("invalid format name: %s", s))
 	}
 }
 
@@ -119,10 +120,10 @@ const (
 
 type SummaryTable []*Summary
 
-func (s *SummaryTable) print(w io.Writer, noColor bool, format outputFormat) error {
+func (s *SummaryTable) print(w io.Writer, format outputFormat) error {
 	switch format {
 	case formatTable:
-		return s.printTable(w, noColor)
+		return s.printTable(w)
 	case formatJSON:
 		return s.printJSON(w)
 	default:
@@ -139,7 +140,7 @@ func (s SummaryTable) printJSON(w io.Writer) error {
 	return enc.Encode(ss)
 }
 
-func (s SummaryTable) printTable(w io.Writer, noColor bool) error {
+func (s SummaryTable) printTable(w io.Writer) error {
 	t := tablewriter.NewWriter(w)
 	t.SetHeader(s.header())
 	t.SetBorder(false)
@@ -157,7 +158,7 @@ func (s SummaryTable) printTable(w io.Writer, noColor bool) error {
 		if strings.HasPrefix(row[4], "0 ") {
 			colors[4] = tablewriter.Colors{tablewriter.FgYellowColor}
 		}
-		if noColor {
+		if color.NoColor {
 			t.Append(row)
 		} else {
 			t.Rich(row, colors)

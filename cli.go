@@ -1,16 +1,29 @@
 package ecrm
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
-	"sort"
+	"strconv"
 
-	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/alecthomas/kong"
 	"github.com/fatih/color"
 	"github.com/fujiwara/logutils"
-	"github.com/mattn/go-isatty"
-	"github.com/urfave/cli/v2"
 )
+
+func init() {
+	// keep backward compatibility with ecrm 0.4.0
+	if c, ok := os.LookupEnv("ECRM_NO_COLOR"); !ok {
+		return
+	} else {
+		if noColor, err := strconv.ParseBool(c); err != nil {
+			panic("ECRM_NO_COLOR must be bool value: " + err.Error())
+		} else {
+			os.Setenv("ECRM_COLOR", strconv.FormatBool(!noColor))
+		}
+	}
+}
 
 var LogLevelFilter = &logutils.LevelFilter{
 	Levels: []logutils.LogLevel{"debug", "info", "notice", "warn", "error"},
@@ -32,140 +45,75 @@ func SetLogLevel(level string) {
 	log.Println("[debug] Setting log level to", level)
 }
 
-func (app *App) NewPlanCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "plan",
-		Usage: "Scan ECS/Lambda resources and find unused ECR images to delete safety.",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "repository",
-				Aliases: []string{"r"},
-				Usage:   "plan for only images in `REPOSITORY`",
-				EnvVars: []string{"ECRM_REPOSITORY"},
-			},
-		},
-		Action: func(c *cli.Context) error {
-			format, err := newOutputFormatFrom(c.String("format"))
-			if err != nil {
-				return err
-			}
-			return app.Run(
-				c.Context,
-				c.String("config"),
-				Option{
-					Repository: c.String("repository"),
-					NoColor:    c.Bool("no-color"),
-					Format:     format,
-				},
-			)
-		},
-	}
+type CLI struct {
+	Config   string `help:"Load configuration from FILE" short:"c" default:"ecrm.yaml" env:"ECRM_CONFIG"`
+	LogLevel string `help:"Set log level (debug, info, notice, warn, error)" default:"info" env:"ECRM_LOG_LEVEL"`
+	Format   string `help:"Output format for plan(table, json)" default:"table" enum:"table,json" env:"ECRM_FORMAT"`
+	Color    bool   `help:"Whether or not to color the output" default:"true" env:"ECRM_COLOR" negatable:""`
+	Version  bool   `help:"Show version"`
+
+	Plan     *PlanCLI     `cmd:"" help:"Scan ECS/Lambda resources and find unused ECR images to delete safety."`
+	Generate *GenerateCLI `cmd:"" help:"Generate ecrm.yaml"`
+	Delete   *DeleteCLI   `cmd:"" help:"Scan ECS/Lambda resources and delete unused ECR images."`
+
+	command string
+	app     *App
 }
 
-func (app *App) NewDeleteCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "delete",
-		Usage: "Scan ECS/Lambda resources and delete unused ECR images.",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "force",
-				Usage:   "force delete images without confirmation",
-				EnvVars: []string{"ECRM_FORCE"},
-			},
-			&cli.StringFlag{
-				Name:    "repository",
-				Aliases: []string{"r"},
-				Usage:   "delete only images in `REPOSITORY`",
-				EnvVars: []string{"ECRM_REPOSITORY"},
-			},
-		},
-		Action: func(c *cli.Context) error {
-			format, err := newOutputFormatFrom(c.String("format"))
-			if err != nil {
-				return err
-			}
-			return app.Run(
-				c.Context,
-				c.String("config"),
-				Option{
-					Delete:     true,
-					Force:      c.Bool("force"),
-					Repository: c.String("repository"),
-					NoColor:    c.Bool("no-color"),
-					Format:     format,
-				},
-			)
-		},
-	}
+type PlanCLI struct {
+	Repository string `short:"r" help:"plan for only images in REPOSITORY" env:"ECRM_REPOSITORY"`
 }
 
-func (app *App) NewCLI() *cli.App {
-	cliApp := &cli.App{
-		Name:  "ecrm",
-		Usage: "A command line tool for managing ECR repositories",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "config",
-				Aliases: []string{"c"},
-				Value:   "ecrm.yaml",
-				Usage:   "Load configuration from `FILE`",
-				EnvVars: []string{"ECRM_CONFIG"},
-			},
-			&cli.StringFlag{
-				Name:    "log-level",
-				Value:   "info",
-				Usage:   "Set log level (debug, info, notice, warn, error)",
-				EnvVars: []string{"ECRM_LOG_LEVEL"},
-			},
-			&cli.BoolFlag{
-				Name:    "no-color",
-				Value:   !isatty.IsTerminal(os.Stdout.Fd()),
-				Usage:   "Whether or not to color the output",
-				EnvVars: []string{"ECRM_NO_COLOR"},
-			},
-			&cli.StringFlag{
-				Name:    "format",
-				Value:   "table",
-				Usage:   "plan output format (table, json)",
-				EnvVars: []string{"ECRM_FORMAT"},
-			},
-		},
-		Before: func(c *cli.Context) error {
-			color.NoColor = c.Bool("no-color")
-			SetLogLevel(c.String("log-level"))
-			return nil
-		},
-		Commands: []*cli.Command{
-			app.NewPlanCommand(),
-			app.NewDeleteCommand(),
-			app.NewGenerateCommand(),
-		},
-	}
-	sort.Sort(cli.FlagsByName(cliApp.Flags))
-	sort.Sort(cli.CommandsByName(cliApp.Commands))
-	return cliApp
+type GenerateCLI struct {
 }
 
-func (app *App) NewLambdaAction() func(c *cli.Context) error {
-	return func(c *cli.Context) error {
-		subcommand := os.Getenv("ECRM_COMMAND")
-		lambda.Start(func() error {
-			format, err := newOutputFormatFrom(c.String("format"))
-			if err != nil {
-				return err
-			}
-			return app.Run(
-				c.Context,
-				c.String("config"),
-				Option{
-					Delete:     subcommand == "delete",
-					Force:      subcommand == "delete", //If it works as bootstrap for a Lambda function, delete images without confirmation.
-					Repository: os.Getenv("ECRM_REPOSITORY"),
-					NoColor:    c.Bool("no-color"),
-					Format:     format,
-				},
-			)
-		})
+type DeleteCLI struct {
+	Force      bool   `help:"force delete images without confirmation" env:"ECRM_FORCE"`
+	Repository string `short:"r" help:"delete only images in REPOSITORY" env:"ECRM_REPOSITORY"`
+}
+
+func (app *App) NewCLI() *CLI {
+	c := &CLI{}
+	k := kong.Parse(c)
+	c.command = k.Command()
+	c.app = app
+	return c
+}
+
+func (c *CLI) Run(ctx context.Context) error {
+	if c.Version {
+		log.Println(c.app.Version)
 		return nil
+	}
+	color.NoColor = !c.Color
+	SetLogLevel(c.LogLevel)
+	log.Println("[debug] region:", c.app.region)
+
+	switch c.command {
+	case "plan":
+		return c.app.Run(ctx, c.Config, Option{
+			Delete:     false,
+			Repository: c.Plan.Repository,
+			Format:     newOutputFormatFrom(c.Format),
+		})
+	case "generate":
+		return c.app.GenerateConfig(ctx, c.Config, Option{})
+	case "delete":
+		return c.app.Run(ctx, c.Config, Option{
+			Delete:     true,
+			Force:      c.Delete.Force,
+			Repository: c.Delete.Repository,
+			Format:     newOutputFormatFrom(c.Format),
+		})
+	default:
+		return fmt.Errorf("unknown command: %s", c.command)
+	}
+}
+
+func (c *CLI) NewLambdaHandler() func(context.Context) error {
+	return func(ctx context.Context) error {
+		c.Color = false // disable color output for Lambda
+		c.command = os.Getenv("ECRM_COMMAND")
+		return c.Run(ctx)
 	}
 }

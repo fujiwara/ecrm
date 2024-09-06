@@ -13,7 +13,6 @@ import (
 
 	"github.com/Songmu/prompter"
 	"github.com/goccy/go-yaml"
-	"github.com/urfave/cli/v2"
 )
 
 var nameToPatternRe = regexp.MustCompile(`^.*?[/_-]`)
@@ -187,20 +186,4 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 		return config.Repositories[i].NamePattern < config.Repositories[j].NamePattern
 	})
 	return nil
-}
-
-func (app *App) NewGenerateCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "generate",
-		Usage: "Generate ecrm.yaml",
-		Action: func(c *cli.Context) error {
-			return app.GenerateConfig(
-				c.Context,
-				c.String("config"),
-				Option{
-					NoColor: c.Bool("no-color"),
-				},
-			)
-		},
-	}
 }

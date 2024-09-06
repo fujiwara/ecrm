@@ -33,6 +33,8 @@ const (
 var untaggedStr = "__UNTAGGED__"
 
 type App struct {
+	Version string
+
 	ecr    *ecr.Client
 	ecs    *ecs.Client
 	lambda *lambda.Client
@@ -43,16 +45,14 @@ type Option struct {
 	Delete     bool
 	Force      bool
 	Repository string
-	NoColor    bool
 	Format     outputFormat
 }
 
-func New(ctx context.Context, region string) (*App, error) {
-	cfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(region))
+func New(ctx context.Context) (*App, error) {
+	cfg, err := awsConfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	return &App{
 		region: cfg.Region,
 		ecr:    ecr.NewFromConfig(cfg),
@@ -217,7 +217,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, h
 	sort.SliceStable(sums, func(i, j int) bool {
 		return sums[i].Repo < sums[j].Repo
 	})
-	if err := sums.print(os.Stdout, opt.NoColor, opt.Format); err != nil {
+	if err := sums.print(os.Stdout, opt.Format); err != nil {
 		return nil, err
 	}
 	return idsMaps, nil
