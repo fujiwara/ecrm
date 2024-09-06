@@ -14,7 +14,7 @@ var version = "current"
 
 func main() {
 	ctx := context.TODO()
-	app, err := ecrm.New(ctx, os.Getenv("AWS_REGION"))
+	app, err := ecrm.New(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}

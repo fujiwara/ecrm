@@ -48,12 +48,12 @@ type Option struct {
 	Format     outputFormat
 }
 
-func New(ctx context.Context, region string) (*App, error) {
-	cfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(region))
+func New(ctx context.Context) (*App, error) {
+	cfg, err := awsConfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
-
+	log.Println("[debug] region:", cfg.Region)
 	return &App{
 		region: cfg.Region,
 		ecr:    ecr.NewFromConfig(cfg),
