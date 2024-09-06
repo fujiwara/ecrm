@@ -53,7 +53,6 @@ func New(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("[debug] region:", cfg.Region)
 	return &App{
 		region: cfg.Region,
 		ecr:    ecr.NewFromConfig(cfg),

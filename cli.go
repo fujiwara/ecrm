@@ -48,7 +48,7 @@ func SetLogLevel(level string) {
 type CLI struct {
 	Config   string `help:"Load configuration from FILE" short:"c" default:"ecrm.yaml" env:"ECRM_CONFIG"`
 	LogLevel string `help:"Set log level (debug, info, notice, warn, error)" default:"info" env:"ECRM_LOG_LEVEL"`
-	Format   string `help:"plan output format (table, json)" default:"table" enum:"table,json" env:"ECRM_FORMAT"`
+	Format   string `help:"Output format for plan(table, json)" default:"table" enum:"table,json" env:"ECRM_FORMAT"`
 	Color    bool   `help:"Whether or not to color the output" default:"true" env:"ECRM_COLOR" negatable:""`
 	Version  bool   `help:"Show version"`
 
@@ -80,13 +80,14 @@ func (app *App) NewCLI() *CLI {
 	return c
 }
 
-func (c *CLI) RunContext(ctx context.Context) error {
+func (c *CLI) Run(ctx context.Context) error {
 	if c.Version {
 		log.Println(c.app.Version)
 		return nil
 	}
 	color.NoColor = !c.Color
 	SetLogLevel(c.LogLevel)
+	log.Println("[debug] region:", c.app.region)
 
 	switch c.command {
 	case "plan":
@@ -113,6 +114,6 @@ func (c *CLI) NewLambdaHandler() func(context.Context) error {
 	return func(ctx context.Context) error {
 		c.Color = false // disable color output for Lambda
 		c.command = os.Getenv("ECRM_COMMAND")
-		return c.RunContext(ctx)
+		return c.Run(ctx)
 	}
 }

@@ -16,7 +16,8 @@ func main() {
 	ctx := context.TODO()
 	app, err := ecrm.New(ctx)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("[error]", err)
+		os.Exit(1)
 	}
 	app.Version = version
 	cli := app.NewCLI()
@@ -25,8 +26,9 @@ func main() {
 		lambda.Start(handler)
 		panic("unreachable here")
 	}
-	if err := cli.RunContext(ctx); err != nil {
-		log.Fatal(err)
+	if err := cli.Run(ctx); err != nil {
+		log.Println("[error]", err)
+		os.Exit(1)
 	}
 }
 
