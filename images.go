@@ -78,9 +78,7 @@ func (i Images) LoadFile(filename string) error {
 		return fmt.Errorf("failed to decode images: %w", err)
 	}
 	for _, u := range in {
-		s := newSet()
-		s.add(filename)
-		i[ImageURI(u)] = s
+		i[ImageURI(u)] = newSet(filename)
 	}
 	return nil
 }

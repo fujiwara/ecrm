@@ -1,0 +1,5 @@
+[
+    "0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9",
+    "0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:bdbfd1f697393756cddf7f8f5726ad80d1e26c37",
+    "123456789012.dkr.ecr.us-east-1.amazonaws.com/foo/bar@sha256:c5f65c7e2263b3e9ccc9ce7eb1623dc602c45e5e9871decbe0d221b75777bc2d"
+]
