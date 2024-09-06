@@ -18,6 +18,8 @@ func isImageIndex(d ecrTypes.ImageDetail) bool {
 	switch ociTypes.MediaType(aws.ToString(d.ImageManifestMediaType)) {
 	case ociTypes.OCIImageIndex:
 		return true
+	case ociTypes.DockerManifestList:
+		return true
 	}
 	return false
 }
