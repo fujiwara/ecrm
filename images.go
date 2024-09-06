@@ -53,19 +53,7 @@ func (u ImageURI) Short() string {
 
 type Images map[ImageURI]set
 
-func (i Images) PrintFile(filename string) error {
-	var w io.WriteCloser
-	if filename == "" || filename == "-" {
-		w = os.Stdout
-	} else {
-		f, err := os.Create(filename)
-		if err != nil {
-			return fmt.Errorf("failed to create file: %w", err)
-		}
-		w = f
-	}
-	defer w.Close()
-
+func (i Images) Print(w io.Writer) error {
 	m := make([]string, 0, len(i))
 	for k := range i {
 		m = append(m, string(k))

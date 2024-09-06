@@ -64,16 +64,16 @@ type CLI struct {
 type GenerateCLI struct {
 }
 
-func (c *GenerateCLI) Option() Option {
-	return Option{}
+func (c *GenerateCLI) Option() *Option {
+	return &Option{}
 }
 
 type PlanCLI struct {
 	PlanOrDelete
 }
 
-func (c *PlanCLI) Option() Option {
-	return Option{
+func (c *PlanCLI) Option() *Option {
+	return &Option{
 		OutputFile:   c.Output,
 		Format:       newOutputFormatFrom(c.Format),
 		Scan:         c.Scan,
@@ -88,8 +88,8 @@ type DeleteCLI struct {
 	Force bool `help:"force delete images without confirmation" env:"ECRM_FORCE"`
 }
 
-func (c *DeleteCLI) Option() Option {
-	return Option{
+func (c *DeleteCLI) Option() *Option {
+	return &Option{
 		OutputFile:   c.Output,
 		Format:       newOutputFormatFrom(c.Format),
 		Scan:         c.Scan,
@@ -116,8 +116,8 @@ type ScanCLI struct {
 	OutputCLI
 }
 
-func (c *ScanCLI) Option() Option {
-	return Option{
+func (c *ScanCLI) Option() *Option {
+	return &Option{
 		OutputFile: c.Output,
 		Scan:       true,
 		ScanOnly:   true,
