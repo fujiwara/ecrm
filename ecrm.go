@@ -284,6 +284,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, k
 	sort.SliceStable(sums, func(i, j int) bool {
 		return sums[i].Repo < sums[j].Repo
 	})
+	log.Printf("[info] output summary to %s as %s", opt.OutputFile, opt.Format)
 	w, err := opt.OutputWriter()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open output: %w", err)
