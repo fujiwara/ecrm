@@ -88,7 +88,7 @@ func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) (I
 			}
 			log.Println("[debug] ImageUri", u)
 			if images.Add(u, aws.ToString(v.FunctionArn)) {
-				log.Printf("[info] %s is in use by Lambda function %s:%s", u.Short(), *v.FunctionName, *v.Version)
+				log.Printf("[info] %s is in use by Lambda function %s:%s", u.String(), *v.FunctionName, *v.Version)
 			}
 		}
 	}
