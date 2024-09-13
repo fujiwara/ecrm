@@ -4,7 +4,11 @@ import (
 	"context"
 	"log"
 
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -78,4 +82,29 @@ func lambdaFunctions(ctx context.Context, client *lambda.Client) ([]lambdaTypes.
 		}
 	}
 	return fns, nil
+}
+
+func ecrRepositories(ctx context.Context, client *ecr.Client) ([]ecrTypes.Repository, error) {
+	repos := make([]ecrTypes.Repository, 0)
+	p := ecr.NewDescribeRepositoriesPaginator(client, &ecr.DescribeRepositoriesInput{})
+	for p.HasMorePages() {
+		repo, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, repo.Repositories...)
+	}
+	return repos, nil
+}
+
+func arnToName(name, removePrefix string) string {
+	if arn.IsARN(name) {
+		a, _ := arn.Parse(name)
+		return strings.Replace(a.Resource, removePrefix, "", 1)
+	}
+	return name
+}
+
+func clusterArnToName(arn string) string {
+	return arnToName(arn, "cluster/")
 }

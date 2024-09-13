@@ -9,7 +9,6 @@ import (
 
 	"github.com/Songmu/prompter"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
@@ -156,16 +155,4 @@ func imageTag(d ecrTypes.ImageDetail) (string, bool) {
 	} else {
 		return untaggedStr, false
 	}
-}
-
-func arnToName(name, removePrefix string) string {
-	if arn.IsARN(name) {
-		a, _ := arn.Parse(name)
-		return strings.Replace(a.Resource, removePrefix, "", 1)
-	}
-	return name
-}
-
-func clusterArnToName(arn string) string {
-	return arnToName(arn, "cluster/")
 }

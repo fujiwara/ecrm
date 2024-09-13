@@ -14,7 +14,6 @@ import (
 	"github.com/Songmu/prompter"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/goccy/go-yaml"
@@ -170,7 +169,7 @@ func (g *Generator) generateLambdaConfig(ctx context.Context, config *Config) er
 }
 
 func (g *Generator) generateRepositoryConfig(ctx context.Context, config *Config) error {
-	repos, err := g.repositories(ctx)
+	repos, err := ecrRepositories(ctx, ecr.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
@@ -201,17 +200,4 @@ func (g *Generator) generateRepositoryConfig(ctx context.Context, config *Config
 		return config.Repositories[i].NamePattern < config.Repositories[j].NamePattern
 	})
 	return nil
-}
-
-func (g *Generator) repositories(ctx context.Context) ([]ecrTypes.Repository, error) {
-	repos := make([]ecrTypes.Repository, 0)
-	p := ecr.NewDescribeRepositoriesPaginator(ecr.NewFromConfig(g.awsCfg), &ecr.DescribeRepositoriesInput{})
-	for p.HasMorePages() {
-		repo, err := p.NextPage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		repos = append(repos, repo.Repositories...)
-	}
-	return repos, nil
 }
