@@ -74,18 +74,18 @@ type PlanCLI struct {
 
 func (c *PlanCLI) Option() *Option {
 	return &Option{
-		OutputFile:   c.Output,
-		Format:       newOutputFormatFrom(c.Format),
-		Scan:         c.Scan,
-		ScannedFiles: c.ScannedFiles,
-		Delete:       false,
-		Repository:   c.Repository,
+		OutputFile: c.Output,
+		Format:     newOutputFormatFrom(c.Format),
+		Scan:       c.Scan,
+		Delete:     false,
+		Repository: RepositoryName(c.Repository),
 	}
 }
 
 type DeleteCLI struct {
 	PlanOrDelete
-	Force bool `help:"force delete images without confirmation" env:"ECRM_FORCE"`
+	ScannedFiles []string `help:"Files of the scan result. ecrm does not delete images in these files." env:"ECRM_SCANNED_FILES"`
+	Force        bool     `help:"force delete images without confirmation" env:"ECRM_FORCE"`
 }
 
 func (c *DeleteCLI) Option() *Option {
@@ -96,16 +96,15 @@ func (c *DeleteCLI) Option() *Option {
 		ScannedFiles: c.ScannedFiles,
 		Delete:       true,
 		Force:        c.Force,
-		Repository:   c.Repository,
+		Repository:   RepositoryName(c.Repository),
 	}
 }
 
 type PlanOrDelete struct {
 	OutputCLI
-	Format       string   `help:"Output format of plan(table, json)" default:"table" enum:"table,json" env:"ECRM_FORMAT"`
-	Scan         bool     `help:"Scan ECS/Lambda resources that in use." default:"true" negatable:"" env:"ECRM_SCAN"`
-	ScannedFiles []string `help:"Files of the scan result. ecrm does not delete images in these files." env:"ECRM_SCANNED_FILES"`
-	Repository   string   `help:"Delete only images in the repository." short:"r" env:"ECRM_REPOSITORY"`
+	Format     string `help:"Output format of plan(table, json)" default:"table" enum:"table,json" env:"ECRM_FORMAT"`
+	Scan       bool   `help:"Scan ECS/Lambda resources that in use." default:"true" negatable:"" env:"ECRM_SCAN"`
+	Repository string `help:"Manage images in the repository only." short:"r" env:"ECRM_REPOSITORY"`
 }
 
 type OutputCLI struct {
@@ -139,7 +138,7 @@ func (c *CLI) Run(ctx context.Context) error {
 
 	switch c.command {
 	case "generate":
-		return c.app.GenerateConfig(ctx, c.Config, c.Generate.Option())
+		return c.app.GenerateConfig(ctx, c.Config)
 	case "scan":
 		return c.app.Run(ctx, c.Config, c.Scan.Option())
 	case "plan":
