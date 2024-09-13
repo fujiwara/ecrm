@@ -19,20 +19,27 @@ Usage: ecrm <command> [flags]
 Flags:
   -h, --help                  Show context-sensitive help.
   -c, --config="ecrm.yaml"    Load configuration from FILE ($ECRM_CONFIG)
-      --log-level="info"      Set log level (debug, info, notice, warn, error) ($ECRM_LOG_LEVEL)
-      --format="table"        plan output format (table, json) ($ECRM_FORMAT)
+      --log-level="info"      Set log level (debug, info, notice, warn, error)
+                              ($ECRM_LOG_LEVEL)
       --[no-]color            Whether or not to color the output ($ECRM_COLOR)
-      --version               Show version
+      --version               Show version.
 
 Commands:
-  plan [flags]
-    Scan ECS/Lambda resources and find unused ECR images to delete safety.
-
   generate [flags]
-    Generate ecrm.yaml
+    Generate a configuration file.
+
+  scan [flags]
+    Scan ECS/Lambda resources. Output image URIs in use.
+
+  plan [flags]
+    Scan ECS/Lambda resources and find unused ECR images that can be deleted
+    safely.
 
   delete [flags]
     Scan ECS/Lambda resources and delete unused ECR images.
+
+  version [flags]
+    Show version.
 ```
 
 ## Configurations
