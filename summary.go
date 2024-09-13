@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 )
@@ -22,7 +24,7 @@ const (
 
 type RepoSummary []*Summary
 
-func NewRepoSummary(repo string) RepoSummary {
+func NewRepoSummary(repo RepositoryName) RepoSummary {
 	return []*Summary{
 		{Repo: repo, Type: SummaryTypeImage},
 		{Repo: repo, Type: SummaryTypeImageIndex},
@@ -63,12 +65,12 @@ func (s RepoSummary) Expire(img ecrTypes.ImageDetail) {
 }
 
 type Summary struct {
-	Repo             string `json:"repository"`
-	Type             string `json:"type"`
-	ExpiredImages    int64  `json:"expired_images"`
-	TotalImages      int64  `json:"total_images"`
-	ExpiredImageSize int64  `json:"expired_image_size"`
-	TotalImageSize   int64  `json:"total_image_size"`
+	Repo             RepositoryName `json:"repository"`
+	Type             string         `json:"type"`
+	ExpiredImages    int64          `json:"expired_images"`
+	TotalImages      int64          `json:"total_images"`
+	ExpiredImageSize int64          `json:"expired_image_size"`
+	TotalImageSize   int64          `json:"total_image_size"`
 }
 
 func (s *Summary) printable() bool {
@@ -80,7 +82,7 @@ func (s *Summary) printable() bool {
 
 func (s *Summary) row() []string {
 	return []string{
-		s.Repo,
+		string(s.Repo),
 		s.Type,
 		fmt.Sprintf("%d (%s)", s.TotalImages, humanize.Bytes(uint64(s.TotalImageSize))),
 		fmt.Sprintf("%d (%s)", -s.ExpiredImages, humanize.Bytes(uint64(s.ExpiredImageSize))),
@@ -88,14 +90,14 @@ func (s *Summary) row() []string {
 	}
 }
 
-func newOutputFormatFrom(s string) (outputFormat, error) {
+func newOutputFormatFrom(s string) outputFormat {
 	switch s {
 	case "table":
-		return formatTable, nil
+		return formatTable
 	case "json":
-		return formatJSON, nil
+		return formatJSON
 	default:
-		return outputFormat(0), fmt.Errorf("invalid format name: %s", s)
+		panic(fmt.Sprintf("invalid format name: %s", s))
 	}
 }
 
@@ -119,10 +121,16 @@ const (
 
 type SummaryTable []*Summary
 
-func (s *SummaryTable) print(w io.Writer, noColor bool, format outputFormat) error {
+func (s SummaryTable) Sort() {
+	sort.SliceStable(s, func(i, j int) bool {
+		return s[i].Repo < s[j].Repo
+	})
+}
+
+func (s *SummaryTable) Print(w io.Writer, format outputFormat) error {
 	switch format {
 	case formatTable:
-		return s.printTable(w, noColor)
+		return s.printTable(w)
 	case formatJSON:
 		return s.printJSON(w)
 	default:
@@ -139,7 +147,7 @@ func (s SummaryTable) printJSON(w io.Writer) error {
 	return enc.Encode(ss)
 }
 
-func (s SummaryTable) printTable(w io.Writer, noColor bool) error {
+func (s SummaryTable) printTable(w io.Writer) error {
 	t := tablewriter.NewWriter(w)
 	t.SetHeader(s.header())
 	t.SetBorder(false)
@@ -157,7 +165,7 @@ func (s SummaryTable) printTable(w io.Writer, noColor bool) error {
 		if strings.HasPrefix(row[4], "0 ") {
 			colors[4] = tablewriter.Colors{tablewriter.FgYellowColor}
 		}
-		if noColor {
+		if color.NoColor {
 			t.Append(row)
 		} else {
 			t.Rich(row, colors)

@@ -12,8 +12,11 @@ import (
 	"strings"
 
 	"github.com/Songmu/prompter"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/goccy/go-yaml"
-	"github.com/urfave/cli/v2"
 )
 
 var nameToPatternRe = regexp.MustCompile(`^.*?[/_-]`)
@@ -26,18 +29,28 @@ func nameToPattern(s string) string {
 	return s
 }
 
-func (app *App) GenerateConfig(ctx context.Context, configFile string, opt Option) error {
+type Generator struct {
+	awsCfg aws.Config
+}
+
+func NewGenerator(cfg aws.Config) *Generator {
+	return &Generator{
+		awsCfg: cfg,
+	}
+}
+
+func (g *Generator) GenerateConfig(ctx context.Context, configFile string) error {
 	config := Config{}
-	if err := app.generateClusterConfig(ctx, &config); err != nil {
+	if err := g.generateClusterConfig(ctx, &config); err != nil {
 		return err
 	}
-	if err := app.generateTaskdefConfig(ctx, &config); err != nil {
+	if err := g.generateTaskdefConfig(ctx, &config); err != nil {
 		return err
 	}
-	if err := app.generateLambdaConfig(ctx, &config); err != nil {
+	if err := g.generateLambdaConfig(ctx, &config); err != nil {
 		return err
 	}
-	if err := app.generateRepositoryConfig(ctx, &config); err != nil {
+	if err := g.generateRepositoryConfig(ctx, &config); err != nil {
 		return err
 	}
 
@@ -60,19 +73,19 @@ func (app *App) GenerateConfig(ctx context.Context, configFile string, opt Optio
 	return nil
 }
 
-func (app *App) generateClusterConfig(ctx context.Context, config *Config) error {
-	clusters, err := app.clusterArns(ctx)
+func (g *Generator) generateClusterConfig(ctx context.Context, config *Config) error {
+	clusters, err := clusterArns(ctx, ecs.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
-	clusterNames := make(map[string]struct{}, len(clusters))
+	clusterNames := newSet()
 	for _, c := range clusters {
 		name := clusterArnToName(c)
 		pattern := nameToPattern(name)
-		clusterNames[pattern] = struct{}{}
+		clusterNames.add(pattern)
 		log.Printf("[debug] cluster %s -> %s", name, pattern)
 	}
-	for name := range clusterNames {
+	for _, name := range clusterNames.members() {
 		cfg := ClusterConfig{}
 		if strings.Contains(name, "*") {
 			cfg.NamePattern = name
@@ -90,19 +103,19 @@ func (app *App) generateClusterConfig(ctx context.Context, config *Config) error
 	return nil
 }
 
-func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error {
-	taskdefs, err := app.taskDefinitionFamilies(ctx)
+func (g *Generator) generateTaskdefConfig(ctx context.Context, config *Config) error {
+	taskdefs, err := taskDefinitionFamilies(ctx, ecs.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
-	taskdefNames := make(map[string]struct{}, len(taskdefs))
+	taskdefNames := newSet()
 	for _, n := range taskdefs {
 		name := arnToName(n, "")
 		pattern := nameToPattern(name)
-		taskdefNames[pattern] = struct{}{}
+		taskdefNames.add(pattern)
 		log.Printf("[debug] taskdef %s -> %s", name, pattern)
 	}
-	for name := range taskdefNames {
+	for _, name := range taskdefNames.members() {
 		cfg := TaskdefConfig{
 			KeepCount: int64(DefaultKeepCount),
 		}
@@ -122,19 +135,19 @@ func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error
 	return nil
 }
 
-func (app *App) generateLambdaConfig(ctx context.Context, config *Config) error {
-	lambdas, err := app.lambdaFunctions(ctx)
+func (g *Generator) generateLambdaConfig(ctx context.Context, config *Config) error {
+	lambdas, err := lambdaFunctions(ctx, lambda.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
-	lambdaNames := make(map[string]struct{}, len(lambdas))
+	lambdaNames := newSet()
 	for _, c := range lambdas {
 		name := arnToName(*c.FunctionName, "")
 		pattern := nameToPattern(name)
-		lambdaNames[pattern] = struct{}{}
+		lambdaNames.add(pattern)
 		log.Printf("[debug] lambda %s -> %s", name, pattern)
 	}
-	for name := range lambdaNames {
+	for _, name := range lambdaNames.members() {
 		cfg := LambdaConfig{
 			KeepCount:  int64(DefaultKeepCount),
 			KeepAliase: true,
@@ -155,19 +168,19 @@ func (app *App) generateLambdaConfig(ctx context.Context, config *Config) error 
 	return nil
 }
 
-func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) error {
-	repos, err := app.repositories(ctx)
+func (g *Generator) generateRepositoryConfig(ctx context.Context, config *Config) error {
+	repos, err := ecrRepositories(ctx, ecr.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
-	repoNames := make(map[string]struct{}, len(repos))
+	repoNames := newSet()
 	for _, r := range repos {
 		name := arnToName(*r.RepositoryName, "")
 		pattern := nameToPattern(name)
-		repoNames[pattern] = struct{}{}
+		repoNames.add(pattern)
 		log.Printf("[debug] ECR %s -> %s", name, pattern)
 	}
-	for name := range repoNames {
+	for _, name := range repoNames.members() {
 		cfg := RepositoryConfig{
 			KeepCount:       int64(DefaultKeepCount),
 			Expires:         DefaultExpiresStr,
@@ -176,7 +189,7 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 		if strings.Contains(name, "*") {
 			cfg.NamePattern = name
 		} else {
-			cfg.Name = name
+			cfg.Name = RepositoryName(name)
 		}
 		config.Repositories = append(config.Repositories, &cfg)
 	}
@@ -187,20 +200,4 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 		return config.Repositories[i].NamePattern < config.Repositories[j].NamePattern
 	})
 	return nil
-}
-
-func (app *App) NewGenerateCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "generate",
-		Usage: "Genarete ecrm.yaml",
-		Action: func(c *cli.Context) error {
-			return app.GenerateConfig(
-				c.Context,
-				c.String("config"),
-				Option{
-					NoColor: c.Bool("no-color"),
-				},
-			)
-		},
-	}
 }

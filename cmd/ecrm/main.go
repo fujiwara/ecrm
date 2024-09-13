@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/fujiwara/ecrm"
 )
 
@@ -13,17 +14,21 @@ var version = "current"
 
 func main() {
 	ctx := context.TODO()
-	app, err := ecrm.New(ctx, os.Getenv("AWS_REGION"))
+	app, err := ecrm.New(ctx)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("[error]", err)
+		os.Exit(1)
 	}
-	cliApp := app.NewCLI()
-	cliApp.Version = version
+	app.Version = version
+	cli := app.NewCLI()
 	if isLambda() && os.Getenv("ECRM_NO_LAMBDA_BOOTSTRAP") == "" {
-		cliApp.Action = app.NewLambdaAction()
+		handler := cli.NewLambdaHandler()
+		lambda.Start(handler)
+		panic("unreachable here")
 	}
-	if err := cliApp.RunContext(ctx, os.Args); err != nil {
-		log.Fatal(err)
+	if err := cli.Run(ctx); err != nil {
+		log.Println("[error]", err)
+		os.Exit(1)
 	}
 }
 

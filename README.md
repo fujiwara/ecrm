@@ -1,36 +1,45 @@
 # ecrm
 
-A command line tool for managing ECR repositories.
+A command line tool for managing Amazon ECR repositories.
 
 ecrm can delete "unused" images safety.
 
 "unused" means,
 
-- Images not specified in running tasks in ECS clusters.
-- Images not specified in avaliable ECS service deployments.
-- Images not specified in exists ECS task definitions.
-- Images not specified in using Lambda functions (PackageType=Image).
+- Images are not used by running tasks in ECS clusters.
+- Images are not specified in available ECS service deployments.
+- Images are not specified in existing ECS task definitions (latest N revisions).
+- Images are not specified by Lambda functions (latest N versions).
 
 ## Usage
 
 ```
-NAME:
-   ecrm - A command line tool for managing ECR repositories
+Usage: ecrm <command> [flags]
 
-USAGE:
-   ecrm [global options] command [command options] [arguments...]
+Flags:
+  -h, --help                  Show context-sensitive help.
+  -c, --config="ecrm.yaml"    Load configuration from FILE ($ECRM_CONFIG)
+      --log-level="info"      Set log level (debug, info, notice, warn, error)
+                              ($ECRM_LOG_LEVEL)
+      --[no-]color            Whether or not to color the output ($ECRM_COLOR)
+      --version               Show version.
 
-COMMANDS:
-   delete    Scan ECS/Lambda resources and delete unused ECR images.
-   generate  Genarete ecrm.yaml
-   plan      Scan ECS/Lambda resources and find unused ECR images to delete safety.
-   help, h   Shows a list of commands or help for one command
+Commands:
+  generate [flags]
+    Generate a configuration file.
 
-GLOBAL OPTIONS:
-   --config FILE, -c FILE  Load configuration from FILE (default: "ecrm.yaml") [$ECRM_CONFIG]
-   --log-level value       Set log level (debug, info, notice, warn, error) (default: "info") [$ECRM_LOG_LEVEL]
-   --no-color              Whether or not to color the output (default: false) [$ECRM_NO_COLOR]
-   --help, -h              show help (default: false)
+  scan [flags]
+    Scan ECS/Lambda resources. Output image URIs in use.
+
+  plan [flags]
+    Scan ECS/Lambda resources and find unused ECR images that can be deleted
+    safely.
+
+  delete [flags]
+    Scan ECS/Lambda resources and delete unused ECR images.
+
+  version [flags]
+    Show version.
 ```
 
 ## Configurations
@@ -45,7 +54,7 @@ clusters:
 task_definitions:
   - name: "*"
     keep_count: 3
-lambda_funcions:
+lambda_functions:
   - name: "*"
     keep_count: 3
 repositories:
@@ -59,38 +68,52 @@ repositories:
 
 ### generate command
 
-`ecrm generate` scans ECS, Lambda and ECR resources in an AWS account and generate a configuration file.
+`ecrm generate` scans ECS, Lambda and ECR resources in an AWS account and generates a configuration file.
 
-```console
-$ ecrm generate --help
-NAME:
-   ecrm generate - Genarete ecrm.yaml
-
-USAGE:
-   ecrm generate [command options] [arguments...]
-
-OPTIONS:
-   --help, -h  show help (default: false)
 ```
+Usage: ecrm generate [flags]
+
+Generate ecrm.yaml
+```
+
+### scan command
+
+`ecrm scan` scans your AWS account's ECS, Lambda, and ECR resources. It outputs image URIs in use.
+
+`ecrm scan --output path/to/file` writes the image URIs in use to the file as JSON format.
+
+The scanned files can be used in the next `ecrm delete` command with `--scanned-files` option.
+
+The format of the file is a simple JSON array of image URIs.
+
+```json
+[
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:latest",
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar@sha256:abcdef1234567890..."
+]
+```
+
+You can create scanned files manually as you need.
+
+If your workload runs on platforms that ecrm does not support (for example, AWS AppRunner, Amazon EKS, etc.), you can use ecrm with the scanned file you created.
 
 ### plan command
 
+The plan command runs `ecrm scan` internally and then creates a plan to delete images.
+
+`ecrm plan` shows summaries of images in ECR repositories that can be deleted safely.
+
 ```console
-$ ecrm plan --help
-NAME:
-   ecrm plan - Scan ECS/Lambda resources and find unused ECR images to delete safety.
+Usage: ecrm plan [flags]
 
-USAGE:
-   ecrm plan [command options] [arguments...]
+Scan ECS/Lambda resources and find unused ECR images to delete safety.
 
-OPTIONS:
-   --format value                          plan output format (table, json) (default: table)
-   --repository REPOSITORY, -r REPOSITORY  plan for only images in REPOSITORY [$ECRM_REPOSITORY]
+Flags:
+  -o, --output="-"            File name of the output. The default is STDOUT ($ECRM_OUTPUT).
+      --format="table"        Output format of plan(table, json) ($ECRM_FORMAT)
+      --[no-]scan             Scan ECS/Lambda resources that in use ($ECRM_SCAN).
+  -r, --repository=STRING     Manage images in the repository only ($ECRM_REPOSITORY).
 ```
-
-`ecrm plan` shows summaries of unused images in ECR.
-
-`ecrm delete` deletes these images (in `EXPIRED` columns) actually.
 
 ```console
 $ ecrm plan
@@ -104,18 +127,23 @@ $ ecrm plan
 
 ### delete command
 
+The delete command first runs `ecrm scan`, then creates a plan to delete images, and finally deletes them.
+
+By default, `ecrm delete` shows a prompt before deleting images. You can use `--force` option to delete images without confirmation.
+
 ```console
-$ ecrm delete --help
-NAME:
-   ecrm delete - scan ECS resources and delete unused ECR images.
+Usage: ecrm delete [flags]
 
-USAGE:
-   ecrm delete [command options] [arguments...]
+Scan ECS/Lambda resources and delete unused ECR images.
 
-OPTIONS:
-   --force                                 force delete images without confirmation (default: false) [$ECRM_FORCE]
-   --repository REPOSITORY, -r REPOSITORY  delete only images in REPOSITORY [$ECRM_REPOSITORY]
-   --help, -h                              show help (default: false)
+Flags:
+  -o, --output="-"                         File name of the output. The default is STDOUT ($ECRM_OUTPUT).
+      --format="table"                     Output format of plan(table, json) ($ECRM_FORMAT)
+      --[no-]scan                          Scan ECS/Lambda resources that in use ($ECRM_SCAN).
+  -r, --repository=STRING                  Manage images in the repository only ($ECRM_REPOSITORY).
+      --scanned-files=SCANNED-FILES,...    Files of the scan result. ecrm does not delete images in these
+                                           files ($ECRM_SCANNED_FILES).
+      --force                              force delete images without confirmation ($ECRM_FORCE)
 ```
 
 ## Notes
@@ -143,6 +171,29 @@ An example output is here.
 See also
 - [Under the hood: Lazy Loading Container Images with Seekable OCI and AWS Fargate](https://aws.amazon.com/jp/blogs/containers/under-the-hood-lazy-loading-container-images-with-seekable-oci-and-aws-fargate/)
 - [AWS Fargate Enables Faster Container Startup using Seekable OCI](https://aws.amazon.com/jp/blogs/aws/aws-fargate-enables-faster-container-startup-using-seekable-oci/)
+
+### Multi accounts / regions support.
+
+`ecrm` supports a single AWS account and region for each run.
+
+If your workloads are deployed in multiple regions or accounts, you should run `ecrm scan` for each region or account to collect all image URIs in use.
+
+Then, you can run `ecrm delete` with the `--scanned-files` option to delete unused images in all regions or accounts.
+
+For example, your ECR in the `account-a`, and your ECS clusters are deployed in `account-a` and `account-b`.
+
+At first, you run `ecrm scan` for each account.
+
+```console
+$ AWS_PROFILE=account-a ecrm scan --output scan-account-a.json
+$ AWS_PROFILE=account-b ecrm scan --output scan-account-b.json
+```
+
+Now, you can run `ecrm delete` with the `--scanned-files` option to safely delete unused images in all accounts.
+
+```console
+$ AWS_PROFILE=account-a ecrm delete --scanned-files scan-account-a.json,scan-account-b.json
+```
 
 ## Author
 

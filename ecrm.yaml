@@ -11,3 +11,4 @@ repositories:
     expires: 30 days
     keep_tag_patterns:
       - latest
+    keep_count: 3
