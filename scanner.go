@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/samber/lo"
 )
 
 type Scanner struct {
@@ -197,18 +198,24 @@ func (s *Scanner) availableResourcesInCluster(ctx context.Context, clusterArn st
 	tdArns := make(set)
 
 	log.Printf("[debug] Checking tasks in %s", clusterArn)
-	tp := ecs.NewListTasksPaginator(s.ecs, &ecs.ListTasksInput{Cluster: &clusterArn})
-	for tp.HasMorePages() {
-		to, err := tp.NextPage(ctx)
-		if err != nil {
-			return nil, err
+	taskArns := make([]string, 0)
+	for _, status := range []ecsTypes.DesiredStatus{ecsTypes.DesiredStatusRunning, ecsTypes.DesiredStatusStopped} {
+		tp := ecs.NewListTasksPaginator(s.ecs, &ecs.ListTasksInput{
+			Cluster:       &clusterArn,
+			DesiredStatus: status,
+		})
+		for tp.HasMorePages() {
+			to, err := tp.NextPage(ctx)
+			if err != nil {
+				return nil, err
+			}
+			taskArns = append(taskArns, to.TaskArns...)
 		}
-		if len(to.TaskArns) == 0 {
-			continue
-		}
+	}
+	for _, tasks := range lo.Chunk(taskArns, 100) { // 100 is the max for describeTasks API
 		tasks, err := s.ecs.DescribeTasks(ctx, &ecs.DescribeTasksInput{
 			Cluster: &clusterArn,
-			Tasks:   to.TaskArns,
+			Tasks:   tasks,
 		})
 		if err != nil {
 			return nil, err
@@ -227,6 +234,9 @@ func (s *Scanner) availableResourcesInCluster(ctx context.Context, clusterArn st
 				log.Printf("[info] taskdef %s is used by %s", td.String(), ts.Resource)
 			}
 			for _, c := range task.Containers {
+				if c.Image == nil {
+					continue
+				}
 				u := ImageURI(aws.ToString(c.Image))
 				if !u.IsECRImage() {
 					continue
@@ -236,7 +246,7 @@ func (s *Scanner) availableResourcesInCluster(ctx context.Context, clusterArn st
 					if s.Images.Add(u, tdArn) {
 						log.Printf("[info] image %s is used by %s container on %s", u.String(), *c.Name, ts.Resource)
 					}
-				} else {
+				} else if c.ImageDigest != nil {
 					base := u.Base()
 					digest := aws.ToString(c.ImageDigest)
 					u := ImageURI(base + "@" + digest)
