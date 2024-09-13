@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -121,13 +120,7 @@ const (
 
 type SummaryTable []*Summary
 
-func (s SummaryTable) Sort() {
-	sort.SliceStable(s, func(i, j int) bool {
-		return s[i].Repo < s[j].Repo
-	})
-}
-
-func (s *SummaryTable) Print(w io.Writer, format outputFormat) error {
+func (s *SummaryTable) print(w io.Writer, format outputFormat) error {
 	switch format {
 	case formatTable:
 		return s.printTable(w)
