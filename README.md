@@ -1,6 +1,6 @@
 # ecrm
 
-A command line tool for managing ECR repositories.
+A command line tool for managing Amazon ECR repositories.
 
 ecrm can delete "unused" images safety.
 
@@ -71,13 +71,18 @@ Generate ecrm.yaml
 
 ### plan command
 
+`ecrm plan` scans ECS, Lambda and ECR resources in an AWS account and shows summaries of unused images in ECR.
+
 ```console
 Usage: ecrm plan [flags]
 
 Scan ECS/Lambda resources and find unused ECR images to delete safety.
 
 Flags:
-  -r, --repository=STRING     plan for only images in REPOSITORY ($ECRM_REPOSITORY)
+  -o, --output="-"            File name of the output. The default is STDOUT ($ECRM_OUTPUT).
+      --format="table"        Output format of plan(table, json) ($ECRM_FORMAT)
+      --[no-]scan             Scan ECS/Lambda resources that in use ($ECRM_SCAN).
+  -r, --repository=STRING     Manage images in the repository only ($ECRM_REPOSITORY).
 ```
 
 `ecrm plan` shows summaries of unused images in ECR.
@@ -94,7 +99,28 @@ $ ecrm plan
       prod/nginx       | 95 (3.7 GB)  | -85 (3.3 GB)  | 10 (381 MB)  
 ```
 
+### scan command
+
+`ecrm scan --output path/to/file` writes the image URIs in use to the file as JSON format.
+
+The scanned files can be used in the next `ecrm delete` command with `--scanned-files` option.
+
+The format of the file is a simple JSON array of image URIs.
+
+```json
+[
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:latest",
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:sha256-abcdef1234567890"
+]
+```
+
+You can create scanned files manually as you need.
+
+If your workload is on platforms that `ecrm plan` does not support (for example, AWS AppRunner, Amazon EKS, etc.), you can use ecrm with the plan file.
+
 ### delete command
+
+`ecrm delete` deletes unused images in ECR repositories.
 
 ```console
 Usage: ecrm delete [flags]
@@ -102,8 +128,13 @@ Usage: ecrm delete [flags]
 Scan ECS/Lambda resources and delete unused ECR images.
 
 Flags:
-      --force                 force delete images without confirmation ($ECRM_FORCE)
-  -r, --repository=STRING     delete only images in REPOSITORY ($ECRM_REPOSITORY)
+  -o, --output="-"                         File name of the output. The default is STDOUT ($ECRM_OUTPUT).
+      --format="table"                     Output format of plan(table, json) ($ECRM_FORMAT)
+      --[no-]scan                          Scan ECS/Lambda resources that in use ($ECRM_SCAN).
+  -r, --repository=STRING                  Manage images in the repository only ($ECRM_REPOSITORY).
+      --scanned-files=SCANNED-FILES,...    Files of the scan result. ecrm does not delete images in these
+                                           files ($ECRM_SCANNED_FILES).
+      --force                              force delete images without confirmation ($ECRM_FORCE)
 ```
 
 ## Notes
@@ -131,6 +162,29 @@ An example output is here.
 See also
 - [Under the hood: Lazy Loading Container Images with Seekable OCI and AWS Fargate](https://aws.amazon.com/jp/blogs/containers/under-the-hood-lazy-loading-container-images-with-seekable-oci-and-aws-fargate/)
 - [AWS Fargate Enables Faster Container Startup using Seekable OCI](https://aws.amazon.com/jp/blogs/aws/aws-fargate-enables-faster-container-startup-using-seekable-oci/)
+
+### Multi regions / accounts support.
+
+`ecrm` supports a single region and an AWS account for each run.
+
+If your workloads are deployed in multiple regions or accounts, you should run `ecrm scan` for each region or account to collect all image URIs in use.
+
+Then, you can run `ecrm delete` with the `--scanned-files` option to delete unused images in all regions or accounts.
+
+For example, your ECR in the `account-a`, and your ECS clusters are deployed in `account-a` and `account-b`.
+
+At first, you run `ecrm scan` for each accounts.
+
+```console
+$ AWS_PROFILE=account-a ecrm scan --output scan-account-a.json
+$ AWS_PROFILE=account-b ecrm scan --output scan-account-b.json
+```
+
+Now, you can run `ecrm delete` with the `--scanned-files` option to safely delete unused images in all accounts.
+
+```console
+$ AWS_PROFILE=account-a ecrm delete --scanned-files scan-account-a.json,scan-account-b.json
+```
 
 ## Author
 
