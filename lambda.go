@@ -12,11 +12,31 @@ import (
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
-func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) error {
-	funcs, err := lambdaFunctions(ctx, s.lambda)
-	if err != nil {
-		return err
+func (app *App) lambdaFunctions(ctx context.Context) ([]lambdaTypes.FunctionConfiguration, error) {
+	fns := make([]lambdaTypes.FunctionConfiguration, 0)
+	p := lambda.NewListFunctionsPaginator(app.lambda, &lambda.ListFunctionsInput{})
+	for p.HasMorePages() {
+		r, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, fn := range r.Functions {
+			if fn.PackageType != "Image" {
+				continue
+			}
+			log.Printf("[debug] lambda function %s PackageType %s", *fn.FunctionName, fn.PackageType)
+			fns = append(fns, fn)
+		}
 	}
+	return fns, nil
+}
+
+func (app *App) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) (Images, error) {
+	funcs, err := app.lambdaFunctions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	images := make(Images)
 
 	for _, fn := range funcs {
 		var name string
@@ -34,7 +54,7 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 		}
 		log.Printf("[debug] Checking Lambda function %s latest %d versions", name, keepCount)
 		p := lambda.NewListVersionsByFunctionPaginator(
-			s.lambda,
+			app.lambda,
 			&lambda.ListVersionsByFunctionInput{
 				FunctionName: fn.FunctionName,
 				MaxItems:     aws.Int32(int32(keepCount)),
@@ -44,7 +64,7 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 		for p.HasMorePages() {
 			r, err := p.NextPage(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			versions = append(versions, r.Versions...)
 		}
@@ -56,23 +76,23 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 		}
 		for _, v := range versions {
 			log.Println("[debug] Getting Lambda function ", *v.FunctionArn)
-			f, err := s.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
+			f, err := app.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
 				FunctionName: v.FunctionArn,
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
 			u := ImageURI(aws.ToString(f.Code.ImageUri))
 			if u == "" {
 				continue
 			}
 			log.Println("[debug] ImageUri", u)
-			if s.Images.Add(u, aws.ToString(v.FunctionArn)) {
+			if images.Add(u, aws.ToString(v.FunctionArn)) {
 				log.Printf("[info] %s is in use by Lambda function %s:%s", u.String(), *v.FunctionName, *v.Version)
 			}
 		}
 	}
-	return nil
+	return images, nil
 }
 
 func lambdaVersionInt64(v string) int64 {

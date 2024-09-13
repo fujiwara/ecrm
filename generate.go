@@ -12,8 +12,6 @@ import (
 	"strings"
 
 	"github.com/Songmu/prompter"
-	"github.com/aws/aws-sdk-go-v2/service/ecs"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/goccy/go-yaml"
 )
 
@@ -62,7 +60,7 @@ func (app *App) GenerateConfig(ctx context.Context, configFile string, opt *Opti
 }
 
 func (app *App) generateClusterConfig(ctx context.Context, config *Config) error {
-	clusters, err := clusterArns(ctx, ecs.NewFromConfig(app.awsCfg))
+	clusters, err := app.clusterArns(ctx)
 	if err != nil {
 		return err
 	}
@@ -92,7 +90,7 @@ func (app *App) generateClusterConfig(ctx context.Context, config *Config) error
 }
 
 func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error {
-	taskdefs, err := taskDefinitionFamilies(ctx, ecs.NewFromConfig(app.awsCfg))
+	taskdefs, err := app.taskDefinitionFamilies(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,7 +122,7 @@ func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error
 }
 
 func (app *App) generateLambdaConfig(ctx context.Context, config *Config) error {
-	lambdas, err := lambdaFunctions(ctx, lambda.NewFromConfig(app.awsCfg))
+	lambdas, err := app.lambdaFunctions(ctx)
 	if err != nil {
 		return err
 	}

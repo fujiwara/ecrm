@@ -18,6 +18,9 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/samber/lo"
 
 	oci "github.com/google/go-containerregistry/pkg/v1"
@@ -33,8 +36,9 @@ var untaggedStr = "__UNTAGGED__"
 type App struct {
 	Version string
 
-	awsCfg aws.Config
 	ecr    *ecr.Client
+	ecs    *ecs.Client
+	lambda *lambda.Client
 	region string
 }
 
@@ -70,9 +74,37 @@ func New(ctx context.Context) (*App, error) {
 	}
 	return &App{
 		region: cfg.Region,
-		awsCfg: cfg,
 		ecr:    ecr.NewFromConfig(cfg),
+		ecs:    ecs.NewFromConfig(cfg),
+		lambda: lambda.NewFromConfig(cfg),
 	}, nil
+}
+
+func (app *App) clusterArns(ctx context.Context) ([]string, error) {
+	clusters := make([]string, 0)
+	p := ecs.NewListClustersPaginator(app.ecs, &ecs.ListClustersInput{})
+	for p.HasMorePages() {
+		co, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		clusters = append(clusters, co.ClusterArns...)
+	}
+	return clusters, nil
+}
+
+func (app *App) taskDefinitionFamilies(ctx context.Context) ([]string, error) {
+	tds := make([]string, 0)
+	p := ecs.NewListTaskDefinitionFamiliesPaginator(app.ecs, &ecs.ListTaskDefinitionFamiliesInput{})
+	for p.HasMorePages() {
+		td, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		log.Println("[debug] task definition families:", td.Families)
+		tds = append(tds, td.Families...)
+	}
+	return tds, nil
 }
 
 func (app *App) Run(ctx context.Context, path string, opt *Option) error {
@@ -85,29 +117,73 @@ func (app *App) Run(ctx context.Context, path string, opt *Option) error {
 		return err
 	}
 
-	scanner := NewScanner(app.awsCfg)
-	if err := scanner.LoadFiles(opt.ScannedFiles); err != nil {
-		return err
-	}
-	if opt.Scan {
-		if err := scanner.Scan(ctx, c); err != nil {
-			return err
+	keepImages := make(Images)
+	if len(opt.ScannedFiles) > 0 {
+		for _, f := range opt.ScannedFiles {
+			log.Println("[info] loading scanned image URIs from", f)
+			imgs := make(Images)
+			if err := imgs.LoadFile(f); err != nil {
+				return err
+			}
+			log.Println("[info] loaded", len(imgs), "image URIs")
+			keepImages.Merge(imgs)
 		}
 	}
-	log.Println("[info] total", len(scanner.Images), "image URIs in use")
+	if opt.Scan {
+		imgs, err := app.DoScan(ctx, c, opt)
+		if err != nil {
+			return err
+		}
+		keepImages.Merge(imgs)
+	}
+	log.Println("[info] total", len(keepImages), "image URIs in use")
 	if opt.ScanOnly {
 		w, err := opt.OutputWriter()
 		if err != nil {
 			return fmt.Errorf("failed to open output: %w", err)
 		}
 		defer w.Close()
-		if err := scanner.Save(w); err != nil {
+		if err := keepImages.Print(w); err != nil {
 			return err
+		}
+		if opt.OutputFile != "" && opt.OutputFile != "-" {
+			log.Println("[info] saved scanned image URIs to", opt.OutputFile)
 		}
 		return nil
 	}
 
-	return app.DoDelete(ctx, c, opt, scanner.Images)
+	return app.DoDelete(ctx, c, opt, keepImages)
+}
+
+func (app *App) DoScan(ctx context.Context, c *Config, opt *Option) (Images, error) {
+	log.Println("[info] scanning resources")
+	// collect images in use by ECS tasks / task definitions
+	var taskdefs []taskdef
+	keepImages := make(Images)
+	if tds, imgs, err := app.scanClusters(ctx, c.Clusters); err != nil {
+		return nil, err
+	} else {
+		taskdefs = append(taskdefs, tds...)
+		keepImages.Merge(imgs)
+	}
+	if tds, err := app.collectTaskdefs(ctx, c.TaskDefinitions); err != nil {
+		return nil, err
+	} else {
+		taskdefs = append(taskdefs, tds...)
+	}
+	if imgs, err := app.collectImages(ctx, taskdefs); err != nil {
+		return nil, err
+	} else {
+		keepImages.Merge(imgs)
+	}
+
+	// collect images in use by lambda functions
+	if imgs, err := app.scanLambdaFunctions(ctx, c.LambdaFunctions); err != nil {
+		return nil, err
+	} else {
+		keepImages.Merge(imgs)
+	}
+	return keepImages, nil
 }
 
 func (app *App) DoDelete(ctx context.Context, c *Config, opt *Option, keepImages Images) error {
@@ -127,6 +203,30 @@ func (app *App) DoDelete(ctx context.Context, c *Config, opt *Option, keepImages
 	}
 
 	return nil
+}
+
+// collectImages collects images in use by ECS tasks / task definitions
+func (app *App) collectImages(ctx context.Context, taskdefs []taskdef) (Images, error) {
+	images := make(Images)
+	dup := newSet()
+	for _, td := range taskdefs {
+		tds := td.String()
+		if dup.contains(tds) {
+			continue
+		}
+		dup.add(tds)
+
+		ids, err := app.extractECRImages(ctx, tds)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			if images.Add(id, tds) {
+				log.Printf("[info] image %s is in use by taskdef %s", id.String(), tds)
+			}
+		}
+	}
+	return images, nil
 }
 
 func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error) {
@@ -422,6 +522,199 @@ func imageTag(d ecrTypes.ImageDetail) (string, bool) {
 	} else {
 		return untaggedStr, false
 	}
+}
+
+// scanClusters scans ECS clusters and returns task definitions and images in use
+func (app *App) scanClusters(ctx context.Context, clustersConfigs []*ClusterConfig) ([]taskdef, Images, error) {
+	tds := make([]taskdef, 0)
+	images := make(Images)
+	clusterArns, err := app.clusterArns(ctx)
+	if err != nil {
+		return tds, nil, err
+	}
+
+	for _, a := range clusterArns {
+		var clusterArn string
+		for _, cc := range clustersConfigs {
+			if cc.Match(a) {
+				clusterArn = a
+				break
+			}
+		}
+		if clusterArn == "" {
+			continue
+		}
+
+		log.Printf("[debug] Checking cluster %s", clusterArn)
+		if _tds, _imgs, err := app.availableResourcesInCluster(ctx, clusterArn); err != nil {
+			return tds, nil, err
+		} else {
+			tds = append(tds, _tds...)
+			images.Merge(_imgs)
+		}
+	}
+	return tds, images, nil
+}
+
+// collectTaskdefs collects task definitions by configurations
+func (app *App) collectTaskdefs(ctx context.Context, tcs []*TaskdefConfig) ([]taskdef, error) {
+	tds := make([]taskdef, 0)
+	families, err := app.taskDefinitionFamilies(ctx)
+	if err != nil {
+		return tds, err
+	}
+
+	for _, family := range families {
+		var name string
+		var keepCount int64
+		for _, tc := range tcs {
+			if tc.Match(family) {
+				name = family
+				keepCount = tc.KeepCount
+				break
+			}
+		}
+		if name == "" {
+			continue
+		}
+		log.Printf("[debug] Checking task definitions %s latest %d revisions", name, keepCount)
+		res, err := app.ecs.ListTaskDefinitions(ctx, &ecs.ListTaskDefinitionsInput{
+			FamilyPrefix: &name,
+			MaxResults:   aws.Int32(int32(keepCount)),
+			Sort:         ecsTypes.SortOrderDesc,
+		})
+		if err != nil {
+			return tds, err
+		}
+		for _, tdArn := range res.TaskDefinitionArns {
+			td, err := parseTaskdefArn(tdArn)
+			if err != nil {
+				return tds, err
+			}
+			tds = append(tds, td)
+		}
+	}
+	return tds, nil
+}
+
+// extractECRImages extracts images (only in ECR) from the task definition
+// returns image URIs
+func (app App) extractECRImages(ctx context.Context, tdName string) ([]ImageURI, error) {
+	images := make([]ImageURI, 0)
+	out, err := app.ecs.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: &tdName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, container := range out.TaskDefinition.ContainerDefinitions {
+		u := ImageURI(*container.Image)
+		if u.IsECRImage() {
+			images = append(images, u)
+		} else {
+			log.Printf("[debug] Skipping non ECR image %s", u)
+		}
+	}
+	return images, nil
+}
+
+// availableResourcesInCluster scans task definitions and images in use in the cluster
+func (app *App) availableResourcesInCluster(ctx context.Context, clusterArn string) ([]taskdef, Images, error) {
+	clusterName := clusterArnToName(clusterArn)
+	tdArns := make(set)
+	images := make(Images)
+
+	log.Printf("[debug] Checking tasks in %s", clusterArn)
+	tp := ecs.NewListTasksPaginator(app.ecs, &ecs.ListTasksInput{Cluster: &clusterArn})
+	for tp.HasMorePages() {
+		to, err := tp.NextPage(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(to.TaskArns) == 0 {
+			continue
+		}
+		tasks, err := app.ecs.DescribeTasks(ctx, &ecs.DescribeTasksInput{
+			Cluster: &clusterArn,
+			Tasks:   to.TaskArns,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, task := range tasks.Tasks {
+			tdArn := aws.ToString(task.TaskDefinitionArn)
+			td, err := parseTaskdefArn(tdArn)
+			if err != nil {
+				return nil, nil, err
+			}
+			ts, err := arn.Parse(*task.TaskArn)
+			if err != nil {
+				return nil, nil, err
+			}
+			if tdArns.add(tdArn) {
+				log.Printf("[info] taskdef %s is used by %s", td.String(), ts.Resource)
+			}
+			for _, c := range task.Containers {
+				u := ImageURI(aws.ToString(c.Image))
+				if !u.IsECRImage() {
+					continue
+				}
+				// ECR image
+				if u.IsDigestURI() {
+					if images.Add(u, tdArn) {
+						log.Printf("[info] image %s is used by %s container on %s", u.String(), *c.Name, ts.Resource)
+					}
+				} else {
+					base := u.Base()
+					digest := aws.ToString(c.ImageDigest)
+					u := ImageURI(base + "@" + digest)
+					if images.Add(u, tdArn) {
+						log.Printf("[info] image %s is used by %s container on %s", u.String(), *c.Name, ts.Resource)
+					}
+				}
+			}
+		}
+	}
+
+	sp := ecs.NewListServicesPaginator(app.ecs, &ecs.ListServicesInput{Cluster: &clusterArn})
+	for sp.HasMorePages() {
+		so, err := sp.NextPage(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(so.ServiceArns) == 0 {
+			continue
+		}
+		svs, err := app.ecs.DescribeServices(ctx, &ecs.DescribeServicesInput{
+			Cluster:  &clusterArn,
+			Services: so.ServiceArns,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, sv := range svs.Services {
+			log.Printf("[debug] Checking service %s", *sv.ServiceName)
+			for _, dp := range sv.Deployments {
+				tdArn := aws.ToString(dp.TaskDefinition)
+				td, err := parseTaskdefArn(tdArn)
+				if err != nil {
+					return nil, nil, err
+				}
+				if tdArns.add(tdArn) {
+					log.Printf("[info] taskdef %s is used by %s deployment on service %s/%s", td.String(), *dp.Status, *sv.ServiceName, clusterName)
+				}
+			}
+		}
+	}
+	var tds []taskdef
+	for a := range tdArns {
+		td, err := parseTaskdefArn(a)
+		if err != nil {
+			return nil, nil, err
+		}
+		tds = append(tds, td)
+	}
+	return tds, images, nil
 }
 
 func arnToName(name, removePrefix string) string {
