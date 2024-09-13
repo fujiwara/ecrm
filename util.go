@@ -3,7 +3,6 @@ package ecrm
 import (
 	"context"
 	"log"
-
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
