@@ -25,7 +25,7 @@ func nameToPattern(s string) string {
 	return s
 }
 
-func (app *App) GenerateConfig(ctx context.Context, configFile string, opt Option) error {
+func (app *App) GenerateConfig(ctx context.Context, configFile string, opt *Option) error {
 	config := Config{}
 	if err := app.generateClusterConfig(ctx, &config); err != nil {
 		return err

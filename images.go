@@ -1,6 +1,13 @@
 package ecrm
 
-import "strings"
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"sort"
+	"strings"
+)
 
 // ImageURI represents an image URI.
 type ImageURI string
@@ -45,6 +52,36 @@ func (u ImageURI) Short() string {
 }
 
 type Images map[ImageURI]set
+
+func (i Images) Print(w io.Writer) error {
+	m := make([]string, 0, len(i))
+	for k := range i {
+		m = append(m, string(k))
+	}
+	sort.Strings(m)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(m); err != nil {
+		return fmt.Errorf("failed to encode image uris: %w", err)
+	}
+	return nil
+}
+
+func (i Images) LoadFile(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer f.Close()
+	in := []string{}
+	if err := json.NewDecoder(f).Decode(&in); err != nil {
+		return fmt.Errorf("failed to decode images: %w", err)
+	}
+	for _, u := range in {
+		i[ImageURI(u)] = newSet(filename)
+	}
+	return nil
+}
 
 func (i Images) Add(u ImageURI, usedBy string) bool {
 	if _, ok := i[u]; !ok {

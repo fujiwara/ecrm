@@ -2,8 +2,12 @@ package ecrm
 
 type set map[string]struct{}
 
-func newSet() set {
-	return make(map[string]struct{})
+func newSet(members ...string) set {
+	s := make(map[string]struct{})
+	for _, m := range members {
+		s[m] = struct{}{}
+	}
+	return s
 }
 
 func (s set) add(v string) bool {
@@ -42,10 +46,7 @@ func (s set) union(o set) set {
 	if o == nil {
 		return s
 	}
-	u := newSet()
-	for k := range s {
-		u.add(k)
-	}
+	u := newSet(s.members()...)
 	for k := range o {
 		u.add(k)
 	}

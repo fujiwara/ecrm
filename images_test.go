@@ -1,9 +1,12 @@
 package ecrm_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/fujiwara/ecrm"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestImageURI(t *testing.T) {
@@ -77,4 +80,39 @@ func TestImages(t *testing.T) {
 		}
 	}
 	t.Logf("images: %#v", images)
+}
+
+func TestLoadImages(t *testing.T) {
+	images := make(ecrm.Images)
+	images.Add("9876543210987.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9", "baz")
+	images.Add("0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9", "baz")
+	err := images.LoadFile("testdata/images.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(images) != 4 {
+		t.Errorf("unexpected images: %d", len(images))
+	}
+	t.Logf("images: %#v", images)
+}
+
+func TestPrintImages(t *testing.T) {
+	images := make(ecrm.Images)
+	images.Add("9876543210987.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9", "baz")
+	images.Add("0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9", "baz")
+	b := &bytes.Buffer{}
+	err := images.Print(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := []string{}
+	if err := json.NewDecoder(b).Decode(&restored); err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{
+		"0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9",
+		"9876543210987.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9",
+	}, restored); diff != "" {
+		t.Errorf("unexpected images: %s", diff)
+	}
 }

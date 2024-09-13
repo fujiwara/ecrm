@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -42,10 +43,28 @@ type App struct {
 }
 
 type Option struct {
-	Delete     bool
-	Force      bool
-	Repository string
-	Format     outputFormat
+	ScanOnly     bool
+	Scan         bool
+	Delete       bool
+	Force        bool
+	Repository   string
+	OutputFile   string
+	Format       outputFormat
+	ScannedFiles []string
+}
+
+func (opt *Option) Validate() error {
+	if len(opt.ScannedFiles) == 0 && !opt.Scan {
+		return fmt.Errorf("no --scanned-files and --no-scan provided. specify at least one")
+	}
+	return nil
+}
+
+func (opt *Option) OutputWriter() (io.WriteCloser, error) {
+	if opt.OutputFile == "" || opt.OutputFile == "-" {
+		return os.Stdout, nil
+	}
+	return os.Create(opt.OutputFile)
 }
 
 func New(ctx context.Context) (*App, error) {
@@ -88,41 +107,89 @@ func (app *App) taskDefinitionFamilies(ctx context.Context) ([]string, error) {
 	return tds, nil
 }
 
-func (app *App) Run(ctx context.Context, path string, opt Option) error {
+func (app *App) Run(ctx context.Context, path string, opt *Option) error {
+	if err := opt.Validate(); err != nil {
+		return err
+	}
+
 	c, err := LoadConfig(path)
 	if err != nil {
 		return err
 	}
 
+	keepImages := make(Images)
+	if len(opt.ScannedFiles) > 0 {
+		for _, f := range opt.ScannedFiles {
+			log.Println("[info] loading scanned image URIs from", f)
+			imgs := make(Images)
+			if err := imgs.LoadFile(f); err != nil {
+				return err
+			}
+			log.Println("[info] loaded", len(imgs), "image URIs")
+			keepImages.Merge(imgs)
+		}
+	}
+	if opt.Scan {
+		imgs, err := app.DoScan(ctx, c, opt)
+		if err != nil {
+			return err
+		}
+		keepImages.Merge(imgs)
+	}
+	log.Println("[info] total", len(keepImages), "image URIs in use")
+	if opt.ScanOnly {
+		w, err := opt.OutputWriter()
+		if err != nil {
+			return fmt.Errorf("failed to open output: %w", err)
+		}
+		defer w.Close()
+		if err := keepImages.Print(w); err != nil {
+			return err
+		}
+		if opt.OutputFile != "" && opt.OutputFile != "-" {
+			log.Println("[info] saved scanned image URIs to", opt.OutputFile)
+		}
+		return nil
+	}
+
+	return app.DoDelete(ctx, c, opt, keepImages)
+}
+
+func (app *App) DoScan(ctx context.Context, c *Config, opt *Option) (Images, error) {
+	log.Println("[info] scanning resources")
 	// collect images in use by ECS tasks / task definitions
 	var taskdefs []taskdef
-	holdImages := make(Images)
+	keepImages := make(Images)
 	if tds, imgs, err := app.scanClusters(ctx, c.Clusters); err != nil {
-		return err
+		return nil, err
 	} else {
 		taskdefs = append(taskdefs, tds...)
-		holdImages.Merge(imgs)
+		keepImages.Merge(imgs)
 	}
 	if tds, err := app.collectTaskdefs(ctx, c.TaskDefinitions); err != nil {
-		return err
+		return nil, err
 	} else {
 		taskdefs = append(taskdefs, tds...)
 	}
 	if imgs, err := app.collectImages(ctx, taskdefs); err != nil {
-		return err
+		return nil, err
 	} else {
-		holdImages.Merge(imgs)
+		keepImages.Merge(imgs)
 	}
 
 	// collect images in use by lambda functions
 	if imgs, err := app.scanLambdaFunctions(ctx, c.LambdaFunctions); err != nil {
-		return err
+		return nil, err
 	} else {
-		holdImages.Merge(imgs)
+		keepImages.Merge(imgs)
 	}
+	return keepImages, nil
+}
 
+func (app *App) DoDelete(ctx context.Context, c *Config, opt *Option, keepImages Images) error {
+	log.Println("[info] finding expired images")
 	// find candidates to delete
-	candidates, err := app.scanRepositories(ctx, c.Repositories, holdImages, opt)
+	candidates, err := app.scanRepositories(ctx, c.Repositories, keepImages, opt)
 	if err != nil {
 		return err
 	}
@@ -155,7 +222,7 @@ func (app *App) collectImages(ctx context.Context, taskdefs []taskdef) (Images, 
 		}
 		for _, id := range ids {
 			if images.Add(id, tds) {
-				log.Printf("[info] image %s is in use by taskdef %s", id.Short(), tds)
+				log.Printf("[info] image %s is in use by taskdef %s", id.String(), tds)
 			}
 		}
 	}
@@ -178,9 +245,9 @@ func (app *App) repositories(ctx context.Context) ([]ecrTypes.Repository, error)
 type deletableImageIDs map[RepositoryName][]ecrTypes.ImageIdentifier
 
 // scanRepositories scans repositories and find expired images
-// holdImages is a set of images in use by ECS tasks / task definitions / lambda functions
+// keepImages is a set of images in use by ECS tasks / task definitions / lambda functions
 // so that they are not deleted
-func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, holdImages Images, opt Option) (deletableImageIDs, error) {
+func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, keepImages Images, opt *Option) (deletableImageIDs, error) {
 	idsMaps := make(deletableImageIDs)
 	sums := SummaryTable{}
 	in := &ecr.DescribeRepositoriesInput{}
@@ -206,7 +273,7 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, h
 			if rc == nil {
 				continue REPO
 			}
-			imageIDs, sum, err := app.unusedImageIdentifiers(ctx, name, rc, holdImages)
+			imageIDs, sum, err := app.unusedImageIdentifiers(ctx, name, rc, keepImages)
 			if err != nil {
 				return nil, err
 			}
@@ -217,7 +284,13 @@ func (app *App) scanRepositories(ctx context.Context, rcs []*RepositoryConfig, h
 	sort.SliceStable(sums, func(i, j int) bool {
 		return sums[i].Repo < sums[j].Repo
 	})
-	if err := sums.print(os.Stdout, opt.Format); err != nil {
+	log.Printf("[info] output summary to %s as %s", opt.OutputFile, opt.Format)
+	w, err := opt.OutputWriter()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open output: %w", err)
+	}
+	defer w.Close()
+	if err := sums.print(w, opt.Format); err != nil {
 		return nil, err
 	}
 	return idsMaps, nil
@@ -227,7 +300,7 @@ const batchDeleteImageIdsLimit = 100
 const batchGetImageLimit = 100
 
 // DeleteImages deletes images from the repository
-func (app *App) DeleteImages(ctx context.Context, repo RepositoryName, ids []ecrTypes.ImageIdentifier, opt Option) error {
+func (app *App) DeleteImages(ctx context.Context, repo RepositoryName, ids []ecrTypes.ImageIdentifier, opt *Option) error {
 	if len(ids) == 0 {
 		log.Println("[info] no need to delete images on", repo)
 		return nil
@@ -264,7 +337,7 @@ func (app *App) DeleteImages(ctx context.Context, repo RepositoryName, ids []ecr
 }
 
 // unusedImageIdentifiers finds image identifiers(by image digests) from the repository.
-func (app *App) unusedImageIdentifiers(ctx context.Context, repo RepositoryName, rc *RepositoryConfig, holdImages Images) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
+func (app *App) unusedImageIdentifiers(ctx context.Context, repo RepositoryName, rc *RepositoryConfig, keepImages Images) ([]ecrTypes.ImageIdentifier, RepoSummary, error) {
 	sums := NewRepoSummary(repo)
 	images, imageIndexes, sociIndexes, idByTags, err := app.listImageDetails(ctx, repo)
 	if err != nil {
@@ -283,7 +356,7 @@ IMAGE:
 		// Check if the image is in use (digest)
 		imageURISha256 := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s@%s", *d.RegistryId, app.region, *d.RepositoryName, *d.ImageDigest))
 		log.Printf("[debug] checking %s", imageURISha256)
-		if holdImages.Contains(imageURISha256) {
+		if keepImages.Contains(imageURISha256) {
 			log.Printf("[info] %s@%s is in used, keep it", repo, *d.ImageDigest)
 			continue IMAGE
 		}
@@ -296,7 +369,7 @@ IMAGE:
 			}
 			imageURI := ImageURI(fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/%s:%s", *d.RegistryId, app.region, *d.RepositoryName, tag))
 			log.Printf("[debug] checking %s", imageURI)
-			if holdImages.Contains(imageURI) {
+			if keepImages.Contains(imageURI) {
 				log.Printf("[info] image %s:%s is in used, keep it", repo, tag)
 				continue IMAGE
 			}

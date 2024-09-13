@@ -140,6 +140,7 @@ func (r *RepositoryConfig) IsExpired(at time.Time) bool {
 }
 
 func LoadConfig(path string) (*Config, error) {
+	log.Println("[info] loading config file:", path)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
