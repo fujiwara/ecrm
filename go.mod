@@ -17,7 +17,7 @@ require (
 	github.com/goccy/go-yaml v1.9.4
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-containerregistry v0.20.0
-	github.com/k1LoW/duration v1.1.0
+	github.com/k1LoW/duration v1.2.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/samber/lo v1.47.0
 )
