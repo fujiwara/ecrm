@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.56.3
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.17.0
-	github.com/fujiwara/logutils v1.1.0
+	github.com/fujiwara/logutils v1.1.2
 	github.com/goccy/go-yaml v1.9.4
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-containerregistry v0.20.0
