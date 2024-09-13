@@ -6,10 +6,10 @@ ecrm can delete "unused" images safety.
 
 "unused" means,
 
-- Images not specified in running tasks in ECS clusters.
-- Images not specified in available ECS service deployments.
-- Images not specified in exists ECS task definitions.
-- Images not specified in using Lambda functions (PackageType=Image).
+- Images are not used by running tasks in ECS clusters.
+- Images are not specified in available ECS service deployments.
+- Images are not specified in existing ECS task definitions (latest N revisions).
+- Images are not specified by Lambda functions (latest N versions).
 
 ## Usage
 
@@ -76,9 +76,32 @@ Usage: ecrm generate [flags]
 Generate ecrm.yaml
 ```
 
+### scan command
+
+`ecrm scan` scans your AWS account's ECS, Lambda, and ECR resources. It outputs image URIs in use.
+
+`ecrm scan --output path/to/file` writes the image URIs in use to the file as JSON format.
+
+The scanned files can be used in the next `ecrm delete` command with `--scanned-files` option.
+
+The format of the file is a simple JSON array of image URIs.
+
+```json
+[
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:latest",
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar@sha256:abcdef1234567890..."
+]
+```
+
+You can create scanned files manually as you need.
+
+If your workload runs on platforms that ecrm does not support (for example, AWS AppRunner, Amazon EKS, etc.), you can use ecrm with the scanned file you created.
+
 ### plan command
 
-`ecrm plan` scans ECS, Lambda and ECR resources in an AWS account and shows summaries of unused images in ECR.
+The plan command runs `ecrm scan` internally and then creates a plan to delete images.
+
+`ecrm plan` shows summaries of images in ECR repositories that can be deleted safely.
 
 ```console
 Usage: ecrm plan [flags]
@@ -92,10 +115,6 @@ Flags:
   -r, --repository=STRING     Manage images in the repository only ($ECRM_REPOSITORY).
 ```
 
-`ecrm plan` shows summaries of unused images in ECR.
-
-`ecrm delete` deletes these images (in `EXPIRED` columns) actually.
-
 ```console
 $ ecrm plan
        REPOSITORY      |    TOTAL     |    EXPIRED    |    KEEP      
@@ -106,28 +125,11 @@ $ ecrm plan
       prod/nginx       | 95 (3.7 GB)  | -85 (3.3 GB)  | 10 (381 MB)  
 ```
 
-### scan command
-
-`ecrm scan --output path/to/file` writes the image URIs in use to the file as JSON format.
-
-The scanned files can be used in the next `ecrm delete` command with `--scanned-files` option.
-
-The format of the file is a simple JSON array of image URIs.
-
-```json
-[
-  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:latest",
-  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:sha256-abcdef1234567890"
-]
-```
-
-You can create scanned files manually as you need.
-
-If your workload is on platforms that `ecrm plan` does not support (for example, AWS AppRunner, Amazon EKS, etc.), you can use ecrm with the plan file.
-
 ### delete command
 
-`ecrm delete` deletes unused images in ECR repositories.
+The delete command first runs `ecrm scan`, then creates a plan to delete images, and finally deletes them.
+
+By default, `ecrm delete` shows a prompt before deleting images. You can use `--force` option to delete images without confirmation.
 
 ```console
 Usage: ecrm delete [flags]
@@ -170,9 +172,9 @@ See also
 - [Under the hood: Lazy Loading Container Images with Seekable OCI and AWS Fargate](https://aws.amazon.com/jp/blogs/containers/under-the-hood-lazy-loading-container-images-with-seekable-oci-and-aws-fargate/)
 - [AWS Fargate Enables Faster Container Startup using Seekable OCI](https://aws.amazon.com/jp/blogs/aws/aws-fargate-enables-faster-container-startup-using-seekable-oci/)
 
-### Multi regions / accounts support.
+### Multi accounts / regions support.
 
-`ecrm` supports a single region and an AWS account for each run.
+`ecrm` supports a single AWS account and region for each run.
 
 If your workloads are deployed in multiple regions or accounts, you should run `ecrm scan` for each region or account to collect all image URIs in use.
 
@@ -180,7 +182,7 @@ Then, you can run `ecrm delete` with the `--scanned-files` option to delete unus
 
 For example, your ECR in the `account-a`, and your ECS clusters are deployed in `account-a` and `account-b`.
 
-At first, you run `ecrm scan` for each accounts.
+At first, you run `ecrm scan` for each account.
 
 ```console
 $ AWS_PROFILE=account-a ecrm scan --output scan-account-a.json
