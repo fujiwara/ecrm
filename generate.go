@@ -12,6 +12,9 @@ import (
 	"strings"
 
 	"github.com/Songmu/prompter"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/goccy/go-yaml"
@@ -27,18 +30,28 @@ func nameToPattern(s string) string {
 	return s
 }
 
-func (app *App) GenerateConfig(ctx context.Context, configFile string, opt *Option) error {
+type Generator struct {
+	awsCfg aws.Config
+}
+
+func NewGenerator(cfg aws.Config) *Generator {
+	return &Generator{
+		awsCfg: cfg,
+	}
+}
+
+func (g *Generator) GenerateConfig(ctx context.Context, configFile string) error {
 	config := Config{}
-	if err := app.generateClusterConfig(ctx, &config); err != nil {
+	if err := g.generateClusterConfig(ctx, &config); err != nil {
 		return err
 	}
-	if err := app.generateTaskdefConfig(ctx, &config); err != nil {
+	if err := g.generateTaskdefConfig(ctx, &config); err != nil {
 		return err
 	}
-	if err := app.generateLambdaConfig(ctx, &config); err != nil {
+	if err := g.generateLambdaConfig(ctx, &config); err != nil {
 		return err
 	}
-	if err := app.generateRepositoryConfig(ctx, &config); err != nil {
+	if err := g.generateRepositoryConfig(ctx, &config); err != nil {
 		return err
 	}
 
@@ -61,8 +74,8 @@ func (app *App) GenerateConfig(ctx context.Context, configFile string, opt *Opti
 	return nil
 }
 
-func (app *App) generateClusterConfig(ctx context.Context, config *Config) error {
-	clusters, err := clusterArns(ctx, ecs.NewFromConfig(app.awsCfg))
+func (g *Generator) generateClusterConfig(ctx context.Context, config *Config) error {
+	clusters, err := clusterArns(ctx, ecs.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
@@ -91,8 +104,8 @@ func (app *App) generateClusterConfig(ctx context.Context, config *Config) error
 	return nil
 }
 
-func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error {
-	taskdefs, err := taskDefinitionFamilies(ctx, ecs.NewFromConfig(app.awsCfg))
+func (g *Generator) generateTaskdefConfig(ctx context.Context, config *Config) error {
+	taskdefs, err := taskDefinitionFamilies(ctx, ecs.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
@@ -123,8 +136,8 @@ func (app *App) generateTaskdefConfig(ctx context.Context, config *Config) error
 	return nil
 }
 
-func (app *App) generateLambdaConfig(ctx context.Context, config *Config) error {
-	lambdas, err := lambdaFunctions(ctx, lambda.NewFromConfig(app.awsCfg))
+func (g *Generator) generateLambdaConfig(ctx context.Context, config *Config) error {
+	lambdas, err := lambdaFunctions(ctx, lambda.NewFromConfig(g.awsCfg))
 	if err != nil {
 		return err
 	}
@@ -156,8 +169,8 @@ func (app *App) generateLambdaConfig(ctx context.Context, config *Config) error 
 	return nil
 }
 
-func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) error {
-	repos, err := app.repositories(ctx)
+func (g *Generator) generateRepositoryConfig(ctx context.Context, config *Config) error {
+	repos, err := g.repositories(ctx)
 	if err != nil {
 		return err
 	}
@@ -188,4 +201,17 @@ func (app *App) generateRepositoryConfig(ctx context.Context, config *Config) er
 		return config.Repositories[i].NamePattern < config.Repositories[j].NamePattern
 	})
 	return nil
+}
+
+func (g *Generator) repositories(ctx context.Context) ([]ecrTypes.Repository, error) {
+	repos := make([]ecrTypes.Repository, 0)
+	p := ecr.NewDescribeRepositoriesPaginator(ecr.NewFromConfig(g.awsCfg), &ecr.DescribeRepositoriesInput{})
+	for p.HasMorePages() {
+		repo, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, repo.Repositories...)
+	}
+	return repos, nil
 }

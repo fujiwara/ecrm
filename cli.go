@@ -79,7 +79,7 @@ func (c *PlanCLI) Option() *Option {
 		Scan:         c.Scan,
 		ScannedFiles: c.ScannedFiles,
 		Delete:       false,
-		Repository:   c.Repository,
+		Repository:   RepositoryName(c.Repository),
 	}
 }
 
@@ -96,7 +96,7 @@ func (c *DeleteCLI) Option() *Option {
 		ScannedFiles: c.ScannedFiles,
 		Delete:       true,
 		Force:        c.Force,
-		Repository:   c.Repository,
+		Repository:   RepositoryName(c.Repository),
 	}
 }
 
@@ -139,7 +139,7 @@ func (c *CLI) Run(ctx context.Context) error {
 
 	switch c.command {
 	case "generate":
-		return c.app.GenerateConfig(ctx, c.Config, c.Generate.Option())
+		return c.app.GenerateConfig(ctx, c.Config)
 	case "scan":
 		return c.app.Run(ctx, c.Config, c.Scan.Option())
 	case "plan":
