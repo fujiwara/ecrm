@@ -149,8 +149,7 @@ func (g *Generator) generateLambdaConfig(ctx context.Context, config *Config) er
 	}
 	for _, name := range lambdaNames.members() {
 		cfg := LambdaConfig{
-			KeepCount:  int64(DefaultKeepCount),
-			KeepAliase: true,
+			KeepCount:   int64(DefaultKeepCount),
 		}
 		if strings.Contains(name, "*") {
 			cfg.NamePattern = name
