@@ -65,7 +65,7 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 				return ok
 			}
 			kept++
-			return kept < keepCount
+			return kept <= keepCount
 		})
 		for _, v := range scanVersions {
 			if err := s.scanLambdaFunctionArn(ctx, *v.FunctionArn, aliases[*v.Version]...); err != nil {
