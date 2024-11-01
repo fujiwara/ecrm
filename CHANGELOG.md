@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.6.0](https://github.com/fujiwara/ecrm/compare/v0.5.0...v0.6.0) - 2024-11-01
+- Bump github.com/alecthomas/kong from 0.9.0 to 1.3.0 by @dependabot in https://github.com/fujiwara/ecrm/pull/56
+- Bump github.com/goccy/go-yaml from 1.9.4 to 1.13.2 by @dependabot in https://github.com/fujiwara/ecrm/pull/55
+- Bump github.com/google/go-containerregistry from 0.20.0 to 0.20.2 by @dependabot in https://github.com/fujiwara/ecrm/pull/52
+- Bump github.com/dustin/go-humanize from 1.0.0 to 1.0.1 by @dependabot in https://github.com/fujiwara/ecrm/pull/51
+- bump Go 1.23 by @fujiwara in https://github.com/fujiwara/ecrm/pull/59
+- Bump the aws-sdk-go-v2 group across 1 directory with 5 updates by @dependabot in https://github.com/fujiwara/ecrm/pull/57
+- obsolete "keep_aliase". All aliased versions are always kept. by @fujiwara in https://github.com/fujiwara/ecrm/pull/58
+
 ## [v0.5.0](https://github.com/fujiwara/ecrm/compare/v0.4.0...v0.5.0) - 2024-09-13
 - modernization by @fujiwara in https://github.com/fujiwara/ecrm/pull/21
 - Bump github.com/Songmu/prompter from 0.5.0 to 0.5.1 by @dependabot in https://github.com/fujiwara/ecrm/pull/29
