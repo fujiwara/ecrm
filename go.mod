@@ -14,9 +14,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.45.4
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.58.3
 	github.com/dustin/go-humanize v1.0.0
-	github.com/fatih/color v1.17.0
+	github.com/fatih/color v1.18.0
 	github.com/fujiwara/logutils v1.1.2
-	github.com/goccy/go-yaml v1.9.4
+	github.com/goccy/go-yaml v1.13.2
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-containerregistry v0.20.0
 	github.com/k1LoW/duration v1.2.0
@@ -41,8 +41,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
-	golang.org/x/text v0.16.0 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	golang.org/x/text v0.19.0 // indirect
 )
