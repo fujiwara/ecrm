@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/samber/lo"
 )
 
 func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) error {
@@ -42,7 +43,6 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 			s.lambda,
 			&lambda.ListVersionsByFunctionInput{
 				FunctionName: fn.FunctionName,
-				MaxItems:     aws.Int32(int32(keepCount)),
 			},
 		)
 		var versions []lambdaTypes.FunctionConfiguration
@@ -56,33 +56,45 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 		sort.SliceStable(versions, func(i, j int) bool {
 			return lambdaVersionInt64(*versions[j].Version) < lambdaVersionInt64(*versions[i].Version)
 		})
-		var kept int64
-		for _, v := range versions {
-			log.Println("[debug] Getting Lambda function ", *v.FunctionArn)
-			f, err := s.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
-				FunctionName: v.FunctionArn,
-			})
-			if err != nil {
+		kept := int64(0)
+		// scan the versions
+		// 1. aliased versions
+		// 2. latest keepCount versions
+		scanVersions := lo.Filter(versions, func(v lambdaTypes.FunctionConfiguration, _ int) bool {
+			if _, ok := aliases[*v.Version]; ok {
+				return ok
+			}
+			kept++
+			return kept < keepCount
+		})
+		for _, v := range scanVersions {
+			if err := s.scanLambdaFunctionArn(ctx, *v.FunctionArn, aliases[*v.Version]...); err != nil {
 				return err
 			}
-			u := ImageURI(aws.ToString(f.Code.ImageUri))
-			if u == "" {
-				continue
-			}
-			log.Println("[debug] ImageUri", u)
-			if a, ok := aliases[*v.Version]; ok { // check if the version is aliased
-				if s.Images.Add(u, aws.ToString(v.FunctionArn)) {
-					log.Printf("[info] %s is in use by Lambda function %s:%s (alias=%v)", u.String(), *v.FunctionName, *v.Version, a)
-				}
-				continue
-			}
-			if kept >= keepCount {
-				continue
-			}
-			if s.Images.Add(u, aws.ToString(v.FunctionArn)) {
-				log.Printf("[info] %s is in use by Lambda function %s:%s", u.String(), *v.FunctionName, *v.Version)
-				kept++
-			}
+		}
+	}
+	return nil
+}
+
+func (s *Scanner) scanLambdaFunctionArn(ctx context.Context, functionArn string, aliasNames ...string) error {
+	log.Println("[debug] Getting Lambda function ", functionArn)
+	f, err := s.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: &functionArn,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get lambda function %s: %w", functionArn, err)
+	}
+	u := ImageURI(aws.ToString(f.Code.ImageUri))
+	if u == "" {
+		// skip if the image URI is empty
+		return nil
+	}
+	log.Println("[debug] ImageUri", u)
+	if s.Images.Add(u, functionArn) {
+		if len(aliasNames) == 0 {
+			log.Printf("[info] %s is in use by Lambda function %s", u.String(), functionArn)
+		} else {
+			log.Printf("[info] %s is in use by Lambda function %s aliases:%v", u.String(), functionArn, aliasNames)
 		}
 	}
 	return nil
