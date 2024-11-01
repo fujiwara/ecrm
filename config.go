@@ -110,7 +110,7 @@ func (r *RepositoryConfig) Validate() error {
 
 	if len(r.KeepTagPatterns) == 0 {
 		log.Printf(
-			"[warn] keep_tag_patterns are not defind. set default keep_tag_patterns to %v",
+			"[warn] keep_tag_patterns are not defined. set default keep_tag_patterns to %v",
 			DefaultKeepTagPatterns,
 		)
 		r.KeepTagPatterns = DefaultKeepTagPatterns
@@ -193,7 +193,7 @@ type LambdaConfig struct {
 	Name        string `yaml:"name,omitempty"`
 	NamePattern string `yaml:"name_pattern,omitempty"`
 	KeepCount   int64  `yaml:"keep_count,omitempty"`
-	KeepAliase  bool   `yaml:"keep_aliase,omitempty"`
+	KeepAliase  *bool  `yaml:"keep_aliase,omitempty"` // for backward compatibility
 }
 
 func (c *LambdaConfig) Validate() error {
@@ -208,6 +208,11 @@ func (c *LambdaConfig) Validate() error {
 			DefaultKeepCount,
 		)
 		c.KeepCount = int64(DefaultKeepCount)
+	}
+	if c.KeepAliase != nil {
+		log.Printf(
+			"[warn] \"keep_aliase\" is obsoleted. All aliased versions are always kept. Please remove it from the lambda_functions section.",
+		)
 	}
 	return nil
 }

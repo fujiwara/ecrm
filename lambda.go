@@ -2,6 +2,7 @@ package ecrm
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/samber/lo"
 )
 
 func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) error {
@@ -33,11 +35,14 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 			continue
 		}
 		log.Printf("[debug] Checking Lambda function %s latest %d versions", name, keepCount)
+		aliases, err := s.getLambdaAliases(ctx, name)
+		if err != nil {
+			return fmt.Errorf("failed to get lambda aliases: %w", err)
+		}
 		p := lambda.NewListVersionsByFunctionPaginator(
 			s.lambda,
 			&lambda.ListVersionsByFunctionInput{
 				FunctionName: fn.FunctionName,
-				MaxItems:     aws.Int32(int32(keepCount)),
 			},
 		)
 		var versions []lambdaTypes.FunctionConfiguration
@@ -51,28 +56,75 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 		sort.SliceStable(versions, func(i, j int) bool {
 			return lambdaVersionInt64(*versions[j].Version) < lambdaVersionInt64(*versions[i].Version)
 		})
-		if len(versions) > int(keepCount) {
-			versions = versions[:int(keepCount)]
-		}
-		for _, v := range versions {
-			log.Println("[debug] Getting Lambda function ", *v.FunctionArn)
-			f, err := s.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
-				FunctionName: v.FunctionArn,
-			})
-			if err != nil {
+		kept := int64(0)
+		// scan the versions
+		// 1. aliased versions
+		// 2. latest keepCount versions
+		scanVersions := lo.Filter(versions, func(v lambdaTypes.FunctionConfiguration, _ int) bool {
+			if _, ok := aliases[*v.Version]; ok {
+				return ok
+			}
+			kept++
+			return kept <= keepCount
+		})
+		for _, v := range scanVersions {
+			if err := s.scanLambdaFunctionArn(ctx, *v.FunctionArn, aliases[*v.Version]...); err != nil {
 				return err
-			}
-			u := ImageURI(aws.ToString(f.Code.ImageUri))
-			if u == "" {
-				continue
-			}
-			log.Println("[debug] ImageUri", u)
-			if s.Images.Add(u, aws.ToString(v.FunctionArn)) {
-				log.Printf("[info] %s is in use by Lambda function %s:%s", u.String(), *v.FunctionName, *v.Version)
 			}
 		}
 	}
 	return nil
+}
+
+func (s *Scanner) scanLambdaFunctionArn(ctx context.Context, functionArn string, aliasNames ...string) error {
+	log.Println("[debug] Getting Lambda function ", functionArn)
+	f, err := s.lambda.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: &functionArn,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get lambda function %s: %w", functionArn, err)
+	}
+	u := ImageURI(aws.ToString(f.Code.ImageUri))
+	if u == "" {
+		// skip if the image URI is empty
+		return nil
+	}
+	log.Println("[debug] ImageUri", u)
+	if s.Images.Add(u, functionArn) {
+		if len(aliasNames) == 0 {
+			log.Printf("[info] %s is in use by Lambda function %s", u.String(), functionArn)
+		} else {
+			log.Printf("[info] %s is in use by Lambda function %s aliases:%v", u.String(), functionArn, aliasNames)
+		}
+	}
+	return nil
+}
+
+func (s *Scanner) getLambdaAliases(ctx context.Context, name string) (map[string][]string, error) {
+	aliases := make(map[string][]string)
+	var nextAliasMarker *string
+	for {
+		res, err := s.lambda.ListAliases(ctx, &lambda.ListAliasesInput{
+			FunctionName: &name,
+			Marker:       nextAliasMarker,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list aliases: %w", err)
+		}
+		for _, alias := range res.Aliases {
+			aliases[*alias.FunctionVersion] = append(aliases[*alias.FunctionVersion], *alias.Name)
+			if alias.RoutingConfig == nil || alias.RoutingConfig.AdditionalVersionWeights == nil {
+				continue
+			}
+			for v := range alias.RoutingConfig.AdditionalVersionWeights {
+				aliases[v] = append(aliases[v], *alias.Name)
+			}
+		}
+		if nextAliasMarker = res.NextMarker; nextAliasMarker == nil {
+			break
+		}
+	}
+	return aliases, nil
 }
 
 func lambdaVersionInt64(v string) int64 {
@@ -80,7 +132,11 @@ func lambdaVersionInt64(v string) int64 {
 	if v == "$LATEST" {
 		vi = math.MaxInt64
 	} else {
-		vi, _ = strconv.ParseInt(v, 10, 64)
+		var err error
+		vi, err = strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			panic(fmt.Sprintf("invalid version number:%s %s", v, err.Error()))
+		}
 	}
 	return vi
 }
