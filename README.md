@@ -11,6 +11,26 @@ ecrm can delete "unused" images safety.
 - Images are not specified in existing ECS task definitions (latest N revisions).
 - Images are not specified by Lambda functions (latest N versions).
 
+## Install
+
+### Homebrew (macOS and Linux)
+
+```console
+$ brew install fujiwara/tap/ecrm
+```
+
+### aqua
+
+[aqua](https://aquaproj.github.io/) is a declarative CLI Version Manager.
+
+```console
+$ aqua g -i fujiwara/ecrm
+```
+
+### Binary packages
+
+[Releases](https://github.com/fujiwara/ecrm/releases)
+
 ## Usage
 
 ```
