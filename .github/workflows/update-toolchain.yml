@@ -30,7 +30,11 @@ jobs:
           sed -i "s|^toolchain .*|toolchain $go_version|" go.mod
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           git config --local user.name "${GITHUB_ACTOR}"
-          git switch -c "update-go-toolchain-$go_version"
+          if git rev-parse --verify "update-go-toolchain-$go_version" >/dev/null 2>&1; then
+            git switch "update-go-toolchain-$go_version"
+          else
+            git switch -c "update-go-toolchain-$go_version"
+          fi
           git add go.mod
           git commit -m "Update Go toolchain to $go_version"
           git push --set-upstream origin "update-go-toolchain-$go_version"
