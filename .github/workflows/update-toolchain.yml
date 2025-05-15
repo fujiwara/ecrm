@@ -1,0 +1,41 @@
+name: Update Go toolchain
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+jobs:
+  test:
+    name: run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+
+      - name: Build & Test
+        run: |
+          mod_version=$(grep toolchain go.mod | awk '{print $2}')
+          go_version=$(go version | awk '{print $3}')
+          if [ "$mod_version" == "$go_version" ]; then
+            echo "Go version in go.mod ($mod_version) matches the installed Go version ($go_version)."
+            echo "No changes needed."
+            exit 0
+          fi
+          echo "Go version in go.mod ($mod_version) does not match the installed Go version ($go_version)."
+          echo "Updating go.mod to use the installed Go version."
+          sed -i "s|^toolchain .*|toolchain $go_version|" go.mod
+          git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          git config --local user.name "${GITHUB_ACTOR}"
+          if git rev-parse --verify "update-go-toolchain-$go_version" >/dev/null 2>&1; then
+            git switch "update-go-toolchain-$go_version"
+          else
+            git switch -c "update-go-toolchain-$go_version"
+          fi
+          git add go.mod
+          git commit -m "Update Go toolchain to $go_version"
+          git push --set-upstream origin "update-go-toolchain-$go_version"
+          gh pr create --base main --head "update-go-toolchain-$go_version" --title "Update Go toolchain to $go_version" --body "This PR updates the Go toolchain to version $go_version."
