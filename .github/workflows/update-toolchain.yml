@@ -36,11 +36,10 @@ jobs:
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           git config --local user.name "${GITHUB_ACTOR}"
           if git rev-parse --verify "update-go-toolchain-$go_version" >/dev/null 2>&1; then
-            git switch "update-go-toolchain-$go_version"
-          else
-            git switch -c "update-go-toolchain-$go_version"
+            echo "Branch update-go-toolchain-$go_version already exists. exiting."
+            exit 0
           fi
-          git pull
+          git switch -c "update-go-toolchain-$go_version"
           sed -i "s|^toolchain .*|toolchain $go_version|" go.mod
           git add go.mod
           git commit -m "Update Go toolchain to $go_version"
