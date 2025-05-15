@@ -33,6 +33,7 @@ jobs:
           fi
           echo "Go version in go.mod ($mod_version) does not match the installed Go version ($go_version)."
           echo "Updating go.mod to use the installed Go version."
+          git fetch --unshallow
           sed -i "s|^toolchain .*|toolchain $go_version|" go.mod
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           git config --local user.name "${GITHUB_ACTOR}"
