@@ -33,8 +33,6 @@ jobs:
           fi
           echo "Go version in go.mod ($mod_version) does not match the installed Go version ($go_version)."
           echo "Updating go.mod to use the installed Go version."
-          git pull
-          sed -i "s|^toolchain .*|toolchain $go_version|" go.mod
           git config --local user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
           git config --local user.name "${GITHUB_ACTOR}"
           if git rev-parse --verify "update-go-toolchain-$go_version" >/dev/null 2>&1; then
@@ -42,6 +40,8 @@ jobs:
           else
             git switch -c "update-go-toolchain-$go_version"
           fi
+          git pull
+          sed -i "s|^toolchain .*|toolchain $go_version|" go.mod
           git add go.mod
           git commit -m "Update Go toolchain to $go_version"
           git push --set-upstream origin "update-go-toolchain-$go_version"
