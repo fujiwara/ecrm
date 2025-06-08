@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.1](https://github.com/fujiwara/ecrm/compare/v0.6.0...v0.6.1) - 2025-06-08
+- Add installation guide to README.md by @ebi-yade in https://github.com/fujiwara/ecrm/pull/61
+- update toolchain workflow by @fujiwara in https://github.com/fujiwara/ecrm/pull/74
+- Update Go toolchain to go1.24.3 by @github-actions in https://github.com/fujiwara/ecrm/pull/75
+- Update Go toolchain to go1.24.4 by @github-actions in https://github.com/fujiwara/ecrm/pull/81
+
 ## [v0.6.0](https://github.com/fujiwara/ecrm/compare/v0.5.0...v0.6.0) - 2024-11-01
 - Bump github.com/alecthomas/kong from 0.9.0 to 1.3.0 by @dependabot in https://github.com/fujiwara/ecrm/pull/56
 - Bump github.com/goccy/go-yaml from 1.9.4 to 1.13.2 by @dependabot in https://github.com/fujiwara/ecrm/pull/55
