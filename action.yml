@@ -1,0 +1,47 @@
+inputs:
+  version:
+    description: "A version to install ecrm"
+    default: latest
+    required: false
+  github-token:
+    description: "The token used when using GitHub CLI"
+    default: ${{ github.token }}
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        github_token: ${{ inputs.github_token }}
+      run: |
+        set -e
+
+        ARCH=$(uname -m)
+        if [ "${ARCH}" = "x86_64" ]; then
+          GOARCH=amd64
+        elif [ "${ARCH}" = "aarch64" ]; then
+          GOARCH=arm64
+        else
+          echo "This runner is not supported."
+          exit 1
+        fi
+
+        VERSION="${{ inputs.version }}"
+        if [ "${VERSION}" = "latest" ]; then
+          VERSION=`gh release list --json name,isLatest --jq '.[] | select(.isLatest)|.name' -R fujiwara/ecrm`
+        fi
+
+        DOWNLOAD_URL=https://github.com/fujiwara/ecrm/releases/download/${VERSION}/ecrm_${VERSION:1}_linux_${GOARCH}.tar.gz
+        echo "download ecrm from ${DOWNLOAD_URL}"
+        cd /tmp
+        curl -sfLO --retry 3 ${DOWNLOAD_URL}
+
+        mkdir -p ${RUNNER_TOOL_CACHE}/ecrm
+        FILENAME=$(basename $DOWNLOAD_URL .tar.gz)
+        tar xzvf ${FILENAME}.tar.gz
+        sudo install ecrm ${RUNNER_TOOL_CACHE}/ecrm/ecrm
+
+        echo "${RUNNER_TOOL_CACHE}/ecrm" >> $GITHUB_PATH
+        "${RUNNER_TOOL_CACHE}/ecrm/ecrm" version
+
