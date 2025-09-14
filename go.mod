@@ -2,7 +2,7 @@ module github.com/fujiwara/ecrm
 
 go 1.21
 
-toolchain go1.24.6
+toolchain go1.24.7
 
 require (
 	github.com/Songmu/prompter v0.5.1
