@@ -6,6 +6,8 @@ lambda_functions:
 task_definitions:
   - name_pattern: "*"
     keep_count: 3
+eks_clusters:
+  - name_pattern: "*"
 repositories:
   - name_pattern: "*"
     expires: 30 days

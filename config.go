@@ -23,6 +23,7 @@ type Config struct {
 	Clusters        []*ClusterConfig    `yaml:"clusters"`
 	TaskDefinitions []*TaskdefConfig    `yaml:"task_definitions"`
 	LambdaFunctions []*LambdaConfig     `yaml:"lambda_functions"`
+	EKSClusters     []*EKSClusterConfig `yaml:"eks_clusters"`
 	Repositories    []*RepositoryConfig `yaml:"repositories"`
 }
 
@@ -53,6 +54,16 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+
+	if c.EKSClusters == nil {
+		log.Println("[warn] eks_clusters are not defined. No EKS clusters will be scanned to find images now using.")
+	}
+	for _, ec := range c.EKSClusters {
+		if err := ec.Validate(); err != nil {
+			return err
+		}
+	}
+
 	for _, rc := range c.Repositories {
 		if err := rc.Validate(); err != nil {
 			return err
@@ -218,6 +229,25 @@ func (c *LambdaConfig) Validate() error {
 }
 
 func (c *LambdaConfig) Match(name string) bool {
+	if c.Name == name {
+		return true
+	}
+	return wildcard.Match(c.NamePattern, name)
+}
+
+type EKSClusterConfig struct {
+	Name        string `yaml:"name,omitempty"`
+	NamePattern string `yaml:"name_pattern,omitempty"`
+}
+
+func (c *EKSClusterConfig) Validate() error {
+	if c.Name == "" && c.NamePattern == "" {
+		return errors.New("eks_clusters name or name_pattern is required")
+	}
+	return nil
+}
+
+func (c *EKSClusterConfig) Match(name string) bool {
 	if c.Name == name {
 		return true
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	ociTypes "github.com/google/go-containerregistry/pkg/v1/types"
@@ -106,4 +107,17 @@ func arnToName(name, removePrefix string) string {
 
 func clusterArnToName(arn string) string {
 	return arnToName(arn, "cluster/")
+}
+
+func eksClusterNames(ctx context.Context, client *eks.Client) ([]string, error) {
+	clusters := make([]string, 0)
+	p := eks.NewListClustersPaginator(client, &eks.ListClustersInput{})
+	for p.HasMorePages() {
+		co, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		clusters = append(clusters, co.Clusters...)
+	}
+	return clusters, nil
 }

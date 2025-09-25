@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/goccy/go-yaml"
 )
@@ -48,6 +49,9 @@ func (g *Generator) GenerateConfig(ctx context.Context, configFile string) error
 		return err
 	}
 	if err := g.generateLambdaConfig(ctx, &config); err != nil {
+		return err
+	}
+	if err := g.generateEKSConfig(ctx, &config); err != nil {
 		return err
 	}
 	if err := g.generateRepositoryConfig(ctx, &config); err != nil {
@@ -197,6 +201,35 @@ func (g *Generator) generateRepositoryConfig(ctx context.Context, config *Config
 			return config.Repositories[i].Name < config.Repositories[j].Name
 		}
 		return config.Repositories[i].NamePattern < config.Repositories[j].NamePattern
+	})
+	return nil
+}
+
+func (g *Generator) generateEKSConfig(ctx context.Context, config *Config) error {
+	clusters, err := eksClusterNames(ctx, eks.NewFromConfig(g.awsCfg))
+	if err != nil {
+		return err
+	}
+	clusterNames := newSet()
+	for _, c := range clusters {
+		pattern := nameToPattern(c)
+		clusterNames.add(pattern)
+		log.Printf("[debug] EKS cluster %s -> %s", c, pattern)
+	}
+	for _, name := range clusterNames.members() {
+		cfg := EKSClusterConfig{}
+		if strings.Contains(name, "*") {
+			cfg.NamePattern = name
+		} else {
+			cfg.Name = name
+		}
+		config.EKSClusters = append(config.EKSClusters, &cfg)
+	}
+	sort.Slice(config.EKSClusters, func(i, j int) bool {
+		if config.EKSClusters[i].Name != config.EKSClusters[j].Name {
+			return config.EKSClusters[i].Name < config.EKSClusters[j].Name
+		}
+		return config.EKSClusters[i].NamePattern < config.EKSClusters[j].NamePattern
 	})
 	return nil
 }

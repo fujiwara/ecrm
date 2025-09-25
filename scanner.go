@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/samber/lo"
 )
@@ -17,6 +18,7 @@ type Scanner struct {
 	Images Images
 
 	ecs    *ecs.Client
+	eks    *eks.Client
 	lambda *lambda.Client
 }
 
@@ -24,6 +26,7 @@ func NewScanner(cfg aws.Config) *Scanner {
 	return &Scanner{
 		Images: make(Images),
 		ecs:    ecs.NewFromConfig(cfg),
+		eks:    eks.NewFromConfig(cfg),
 		lambda: lambda.NewFromConfig(cfg),
 	}
 }
@@ -49,6 +52,10 @@ func (s *Scanner) Scan(ctx context.Context, c *Config) error {
 
 	// collect images in use by lambda functions
 	if err := s.scanLambdaFunctions(ctx, c.LambdaFunctions); err != nil {
+		return err
+	}
+
+	if err := s.scanEKSClusters(ctx, c.EKSClusters); err != nil {
 		return err
 	}
 
