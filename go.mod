@@ -1,6 +1,6 @@
 module github.com/fujiwara/ecrm
 
-go 1.21
+go 1.24
 
 toolchain go1.25.1
 

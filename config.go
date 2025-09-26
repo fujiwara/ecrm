@@ -20,10 +20,11 @@ var (
 )
 
 type Config struct {
-	Clusters        []*ClusterConfig    `yaml:"clusters"`
-	TaskDefinitions []*TaskdefConfig    `yaml:"task_definitions"`
-	LambdaFunctions []*LambdaConfig     `yaml:"lambda_functions"`
-	Repositories    []*RepositoryConfig `yaml:"repositories"`
+	Clusters         []*ClusterConfig    `yaml:"clusters"`
+	TaskDefinitions  []*TaskdefConfig    `yaml:"task_definitions"`
+	LambdaFunctions  []*LambdaConfig     `yaml:"lambda_functions"`
+	ExternalCommands []*ExternalCommand  `yaml:"external_commands"`
+	Repositories     []*RepositoryConfig `yaml:"repositories"`
 }
 
 func (c *Config) Validate() error {
