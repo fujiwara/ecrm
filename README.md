@@ -129,10 +129,12 @@ Usage: ecrm plan [flags]
 Scan ECS/Lambda resources and find unused ECR images to delete safety.
 
 Flags:
-  -o, --output="-"            File name of the output. The default is STDOUT ($ECRM_OUTPUT).
-      --format="table"        Output format of plan(table, json) ($ECRM_FORMAT)
-      --[no-]scan             Scan ECS/Lambda resources that in use ($ECRM_SCAN).
-  -r, --repository=STRING     Manage images in the repository only ($ECRM_REPOSITORY).
+  -o, --output="-"                         File name of the output. The default is STDOUT ($ECRM_OUTPUT).
+      --format="table"                     Output format of plan(table, json) ($ECRM_FORMAT)
+      --[no-]scan                          Scan ECS/Lambda resources that in use ($ECRM_SCAN).
+  -r, --repository=STRING                  Manage images in the repository only ($ECRM_REPOSITORY).
+      --scanned-files=SCANNED-FILES,...    Files of the scan result. ecrm does not delete images in these files
+                                           ($ECRM_SCANNED_FILES).
 ```
 
 ```console
