@@ -69,23 +69,14 @@ func (i Images) Print(w io.Writer) error {
 }
 
 func (i Images) LoadFile(filename string) error {
-	f, err := os.Open(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer f.Close()
-	in := []string{}
-	if err := json.NewDecoder(f).Decode(&in); err != nil {
-		return fmt.Errorf("failed to decode images: %w", err)
-	}
-	for _, u := range in {
-		log.Println("[debug] ImageUri", u, "src", filename)
-		i[ImageURI(u)] = newSet(filename)
-	}
-	return nil
+	return i.LoadJSON(filename, b)
 }
 
-func (i Images) LoadExternalJSON(src string, b []byte) error {
+func (i Images) LoadJSON(src string, b []byte) error {
 	in := []string{}
 	if err := json.Unmarshal(b, &in); err != nil {
 		return fmt.Errorf("failed to decode images: %w", err)

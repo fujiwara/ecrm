@@ -97,7 +97,7 @@ func TestLoadImages(t *testing.T) {
 	t.Logf("images: %#v", images)
 }
 
-func TestLoadExternalJSON(t *testing.T) {
+func TestLoadJSON(t *testing.T) {
 	images := make(ecrm.Images)
 	images.Add("9876543210987.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9", "baz")
 	images.Add("0123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:fe668fb9", "baz")
@@ -106,7 +106,7 @@ func TestLoadExternalJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = images.LoadExternalJSON(src, b)
+	err = images.LoadJSON(src, b)
 	if err != nil {
 		t.Fatal(err)
 	}

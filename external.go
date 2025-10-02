@@ -26,7 +26,7 @@ func (s *Scanner) scanExternalCommands(ctx context.Context, commands []*External
 		}
 		imgs := make(Images)
 		src := "external_command: " + strings.Join(ext.Command, " ")
-		if err := imgs.LoadExternalJSON(src, b); err != nil {
+		if err := imgs.LoadJSON(src, b); err != nil {
 			return err
 		}
 		s.Images.Merge(imgs)
