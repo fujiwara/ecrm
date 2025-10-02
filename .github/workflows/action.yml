@@ -1,0 +1,30 @@
+name: test action
+on:
+  push:
+    branches:
+      - main
+      - actions-test
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      matrix:
+        env:
+          - runner: ubuntu-24.04
+          - runner: ubuntu-24.04-arm
+    name: test action
+    runs-on: ${{ matrix.env.runner }}
+    steps:
+      - uses: fujiwara/ecrm@main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: fujiwara/ecrm@main
+        with:
+          version: v0.6.1
+
+      - uses: fujiwara/ecrm@actions-test
+        with:
+          version: v0.6.1
+          args: version --help

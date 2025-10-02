@@ -7,6 +7,10 @@ inputs:
     description: "The token used when using GitHub CLI"
     default: ${{ github.token }}
     required: false
+  args:
+    description: "Arguments passed to ecrm"
+    default: ""
+    required: false
 
 runs:
   using: "composite"
@@ -14,6 +18,7 @@ runs:
     - shell: bash
       env:
         github_token: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
       run: |
         set -e
 
@@ -44,4 +49,8 @@ runs:
 
         echo "${RUNNER_TOOL_CACHE}/ecrm" >> $GITHUB_PATH
         "${RUNNER_TOOL_CACHE}/ecrm/ecrm" version
-
+    - name: Run ecrm with args
+      shell: bash
+      run: |
+        ecrm ${{ inputs.args }}
+      if: ${{ inputs.args != '' }}

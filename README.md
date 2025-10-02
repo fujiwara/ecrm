@@ -31,6 +31,40 @@ $ aqua g -i fujiwara/ecrm
 
 [Releases](https://github.com/fujiwara/ecrm/releases)
 
+### GitHub Actions
+
+Action fujiwara/ecrm@main installs ecrm binary for Linux.
+
+This action installs the specified version of ecrm.
+
+```yml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: fujiwara/ecrm@main
+        with:
+          version: v0.7.0
+      - run: |
+          ecrm delete --force
+```
+
+When the args input is specified, the command `ecrm {args}` is executed after the installation.
+
+```yaml
+      - uses: fujiwara/ecrm@main
+        with:
+          version: v0.7.0
+          args: delete --force
+```
+
+Note:
+- `version` is not required, but it is recommended that the version be specified.
+  - The default version is not fixed and may change in the future.
+- `os` and `arch` are automatically detected.
+
+
 ## Usage
 
 ```
