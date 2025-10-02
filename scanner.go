@@ -52,6 +52,10 @@ func (s *Scanner) Scan(ctx context.Context, c *Config) error {
 		return err
 	}
 
+	if err := s.scanExternalCommands(ctx, c.ExternalCommands); err != nil {
+		return err
+	}
+
 	return nil
 }
 

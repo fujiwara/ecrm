@@ -77,6 +77,11 @@ task_definitions:
 lambda_functions:
   - name: "*"
     keep_count: 3
+external_commands:
+  - command: ["path/to/command", "arg1", "arg2"]
+    timeout: 30s
+    env:
+      AWS_REGION: "us-west-2"
 repositories:
   - name_pattern: "prod/*"
     expires: 90days
@@ -193,6 +198,37 @@ An example output is here.
 See also
 - [Under the hood: Lazy Loading Container Images with Seekable OCI and AWS Fargate](https://aws.amazon.com/jp/blogs/containers/under-the-hood-lazy-loading-container-images-with-seekable-oci-and-aws-fargate/)
 - [AWS Fargate Enables Faster Container Startup using Seekable OCI](https://aws.amazon.com/jp/blogs/aws/aws-fargate-enables-faster-container-startup-using-seekable-oci/)
+
+### External Commands
+
+`ecrm` allows you to run external commands during the scan and delete process.
+
+You can use external commands to integrate with other systems or platforms that `ecrm` does not natively support.
+
+For example, if you have workloads running on AWS AppRunner or Amazon EKS or etc., you can create a script that fetches the image URIs used by those services and outputs them in the required JSON format.
+
+```yaml
+external_commands:
+  - command: ["path/to/command", "arg1", "arg2"]
+    timeout: 30s
+    env:
+      AWS_REGION: "us-west-2"
+    dir: "/path/to/working/directory"
+```
+
+The command will output a JSON array of image URIs to STDOUT. `ecrm` will read the output and include the image URIs in its scan results to avoid deleting them.
+
+The format of the output required is a simple JSON array of image URIs.
+
+```json
+[
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar:latest",
+  "012345678901.dkr.ecr.ap-northeast-1.amazonaws.com/foo/bar@sha256:abcdef1234567890..."
+]
+```
+
+#### Use-case of External Commands
+
 
 ### Multi accounts / regions support.
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -68,17 +69,21 @@ func (i Images) Print(w io.Writer) error {
 }
 
 func (i Images) LoadFile(filename string) error {
-	f, err := os.Open(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer f.Close()
+	return i.LoadJSON(filename, b)
+}
+
+func (i Images) LoadJSON(src string, b []byte) error {
 	in := []string{}
-	if err := json.NewDecoder(f).Decode(&in); err != nil {
+	if err := json.Unmarshal(b, &in); err != nil {
 		return fmt.Errorf("failed to decode images: %w", err)
 	}
 	for _, u := range in {
-		i[ImageURI(u)] = newSet(filename)
+		log.Println("[debug] ImageUri", u, "src", src)
+		i[ImageURI(u)] = newSet(src)
 	}
 	return nil
 }
