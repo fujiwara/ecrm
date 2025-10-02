@@ -59,10 +59,9 @@ When the args input is specified, the command `ecrm {args}` is executed after th
           args: delete --force
 ```
 
-Note:
-- `version` is not required, but it is recommended that the version be specified.
+- `version` is not required, but it is highly recommended that the version be specified.
   - The default version is not fixed and may change in the future.
-- `os` and `arch` are automatically detected.
+  - To use the latest version, specify `latest` and set environment variable `GH_TOKEN` with a GitHub token that has access to the repository to avoid rate limiting.
 
 
 ## Usage

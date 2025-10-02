@@ -16,15 +16,18 @@ jobs:
     name: test action
     runs-on: ${{ matrix.env.runner }}
     steps:
-      - uses: fujiwara/ecrm@main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: fujiwara/ecrm@main
+      - name: Install ecrm with version
+        uses: fujiwara/ecrm@main
         with:
           version: v0.6.1
 
-      - uses: fujiwara/ecrm@actions-test
+      - name: Install ecrm latest version
+        uses: fujiwara/ecrm@main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run ecrm with args
+        uses: fujiwara/ecrm@actions-test
         with:
           version: v0.6.1
           args: version --help

@@ -3,10 +3,6 @@ inputs:
     description: "A version to install ecrm"
     default: latest
     required: false
-  github-token:
-    description: "The token used when using GitHub CLI"
-    default: ${{ github.token }}
-    required: false
   args:
     description: "Arguments passed to ecrm"
     default: ""
@@ -17,8 +13,7 @@ runs:
   steps:
     - shell: bash
       env:
-        github_token: ${{ inputs.github_token }}
-        GH_TOKEN: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -e
 
