@@ -18,6 +18,7 @@ runs:
     - shell: bash
       env:
         github_token: ${{ inputs.github_token }}
+        GH_TOKEN: ${{ inputs.github_token }}
       run: |
         set -e
 
