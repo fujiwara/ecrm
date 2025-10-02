@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.7.0](https://github.com/fujiwara/ecrm/compare/v0.6.1...v0.7.0) - 2025-10-02
+- Update Go toolchain to go1.25.1 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/92
+- ecrm plan --scanned-files by @fujiwara in https://github.com/fujiwara/ecrm/pull/95
+- Add external command support for custom image discovery by @fujiwara in https://github.com/fujiwara/ecrm/pull/96
+- Add args inputs for action.yml by @fujiwara in https://github.com/fujiwara/ecrm/pull/98
+- fix actions test by @fujiwara in https://github.com/fujiwara/ecrm/pull/99
+
 ## [v0.6.1](https://github.com/fujiwara/ecrm/compare/v0.6.0...v0.6.1) - 2025-09-19
 - Add installation guide to README.md by @ebi-yade in https://github.com/fujiwara/ecrm/pull/61
 - update toolchain workflow by @fujiwara in https://github.com/fujiwara/ecrm/pull/74
