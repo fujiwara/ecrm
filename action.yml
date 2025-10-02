@@ -5,7 +5,7 @@ inputs:
     required: false
   github-token:
     description: "The token used when using GitHub CLI"
-    default: ${{ github.token }}
+    default: ${{ secrets.GITHUB_TOKEN }}
     required: false
   args:
     description: "Arguments passed to ecrm"
