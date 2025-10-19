@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.7.1](https://github.com/fujiwara/ecrm/compare/v0.7.0...v0.7.1) - 2025-10-19
+- Update Go toolchain to go1.25.2 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/100
+- Update Go toolchain to go1.25.3 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/102
+
 ## [v0.7.0](https://github.com/fujiwara/ecrm/compare/v0.6.1...v0.7.0) - 2025-10-02
 - Update Go toolchain to go1.25.1 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/92
 - ecrm plan --scanned-files by @fujiwara in https://github.com/fujiwara/ecrm/pull/95
