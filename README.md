@@ -210,13 +210,15 @@ Flags:
 
 ### Support to image indexes and soci indexes.
 
-ecrm supports image indexes and soci (Seekable OCI) indexes. ecrm deletes these images that are related to expired images safely.
+ecrm supports image indexes and soci (Seekable OCI) indexes. ecrm handles these images safely during the plan and delete process.
 
 1. Scans ECR repositories.
    - Detect image type (Image, Image index, Soci index).
-2. Find expired images.
-3. Find expired image indexes related to expired images by the image tag (sha256-{digest of image}).
-4. Find soci indexes related to expired image indexes using ECR BatchGetImage API for expired images.
+2. Determine which image indexes should be kept (by all standard criteria: in-use references, tag patterns, expiry, keep_count).
+3. Protect constituent platform-specific images (e.g. linux/amd64, linux/arm64) referenced by kept image indexes, so they are not deleted even if they would otherwise be expired.
+4. Find expired images (excluding protected constituent images).
+5. Find expired image indexes.
+6. Find soci indexes related to expired image indexes using ECR BatchGetImage API.
 
 An example output is here.
 

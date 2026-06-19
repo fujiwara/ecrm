@@ -1,5 +1,6 @@
 package ecrm
 
 var (
-	ParseTaskdefArn = parseTaskdefArn
+	ParseTaskdefArn  = parseTaskdefArn
+	IsKeptImageIndex = isKeptImageIndex
 )
