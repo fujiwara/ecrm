@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.7.2](https://github.com/fujiwara/ecrm/compare/v0.7.1...v0.7.2) - 2026-06-19
+
+- Update Go toolchain to go1.25.5 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/108
+- Update Go toolchain to go1.25.6 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/112
+- Update Go toolchain to go1.25.8 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/119
+- Update GitHub Actions to latest versions by @fujiwara in https://github.com/fujiwara/ecrm/pull/124
+- Protect constituent images referenced by kept image indexes by @fujiwara in https://github.com/fujiwara/ecrm/pull/125
+- Update Go module dependencies to latest versions by @fujiwara in https://github.com/fujiwara/ecrm/pull/126
+
 ## [v0.7.1](https://github.com/fujiwara/ecrm/compare/v0.7.0...v0.7.1) - 2025-11-21
 - Update Go toolchain to go1.25.2 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/100
 - Update Go toolchain to go1.25.3 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/102
