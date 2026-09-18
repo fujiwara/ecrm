@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.7.3](https://github.com/fujiwara/ecrm/compare/v0.7.2...v0.7.3) - 2026-09-18
+
+- Bump the aws-sdk-go-v2 group across 1 directory with 5 updates by @dependabot[bot] in https://github.com/fujiwara/ecrm/pull/137
+
 ## [v0.7.2](https://github.com/fujiwara/ecrm/compare/v0.7.1...v0.7.2) - 2026-06-19
 
 - Update Go toolchain to go1.25.5 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/108
