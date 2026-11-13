@@ -21,7 +21,6 @@ require (
 	github.com/google/go-containerregistry v0.22.1
 	github.com/k1LoW/duration v1.2.0
 	github.com/olekukonko/tablewriter v1.1.5
-	github.com/samber/lo v1.53.0
 )
 
 require (
@@ -48,5 +47,4 @@ require (
 	github.com/olekukonko/ll v0.1.6 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/term v0.48.0 // indirect
-	golang.org/x/text v0.44.0 // indirect
 )

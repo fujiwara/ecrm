@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/Songmu/prompter"
@@ -12,7 +13,6 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
-	"github.com/samber/lo"
 )
 
 const (
@@ -124,12 +124,11 @@ func (app *App) DeleteImages(ctx context.Context, repo RepositoryName, ids []ecr
 	for _, id := range ids {
 		log.Printf("[notice] Deleting %s %s", repo, *id.ImageDigest)
 	}
-	chunkIDs := lo.Chunk(ids, batchDeleteImageIdsLimit)
 	var deletedCount int
 	defer func() {
 		log.Printf("[info] Deleted %d images on %s", deletedCount, repo)
 	}()
-	for _, ids := range chunkIDs {
+	for ids := range slices.Chunk(ids, batchDeleteImageIdsLimit) {
 		output, err := app.ecr.BatchDeleteImage(ctx, &ecr.BatchDeleteImageInput{
 			ImageIds:       ids,
 			RepositoryName: aws.String(string(repo)),
