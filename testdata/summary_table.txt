@@ -1,0 +1,6 @@
+          REPOSITORY           |    TYPE     |    TOTAL    |   EXPIRED    |    KEEP    
+-------------------------------+-------------+-------------+--------------+------------
+ app/web                       | Image       | 120 (64 GB) | -100 (52 GB) | 20 (12 GB) 
+ app/web                       | Image index | 12 (24 kB)  | -2 (4.0 kB)  | 10 (20 kB) 
+ batch                         | Image       | 3 (1.5 GB)  |              | 3 (1.5 GB) 
+ old/very-long-repository-name | Image       | 5 (800 MB)  | -5 (800 MB)  | 0 (0 B)    
