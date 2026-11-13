@@ -28,3 +28,54 @@ jobs:
           go test -race ./...
         env:
           GO111MODULE: on
+
+  integration:
+    name: Integration test with AWS Emulator
+    runs-on: ubuntu-latest
+    env:
+      EMULATOR_TELEMETRY: "off"
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27'
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install AWS Emulator
+        working-directory: ${{ runner.temp }}
+        env:
+          # https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/versions.json
+          EMULATOR_VERSION: 1.0.342
+          PACKAGE_BASE_URL: https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS
+          KEY_URL: https://downloads.aws.com/keys/gpg/current.asc
+          KEY_FINGERPRINT: 98BCF336A3BE53B734E967C52E5BF49BD940F624
+        run: |
+          PACKAGE_URL="$PACKAGE_BASE_URL/aws-emulator_${EMULATOR_VERSION}-1_amd64.deb"
+          curl -fsSLo aws-emulator.deb "$PACKAGE_URL"
+          curl -fsSLo aws-emulator.deb.sig "$PACKAGE_URL.sig"
+          curl -fsSLo aws-publishing.asc "$KEY_URL"
+          gpg --import aws-publishing.asc
+          gpg --status-fd 1 --verify aws-emulator.deb.sig aws-emulator.deb | grep -q "VALIDSIG $KEY_FINGERPRINT"
+          sudo apt-get install -y ./aws-emulator.deb
+          aws-emulator -v
+
+      - name: Start AWS Emulator
+        run: |
+          aws-emulator > "$RUNNER_TEMP/aws-emulator.log" 2>&1 &
+          for _ in $(seq 30); do
+            if curl -sf --cacert "$HOME/.aws/emulator/9297/ca.pem" https://127.0.0.1:9297/__admin/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/aws-emulator.log"
+          exit 1
+
+      - name: Integration test
+        run: make test-integration
+
+      - name: Show AWS Emulator log
+        if: failure()
+        run: cat "$RUNNER_TEMP/aws-emulator.log"
