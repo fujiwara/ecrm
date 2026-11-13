@@ -288,6 +288,25 @@ Now, you can run `ecrm delete` with the `--scanned-files` option to safely delet
 $ AWS_PROFILE=account-a ecrm delete --scanned-files scan-account-a.json,scan-account-b.json
 ```
 
+## Development
+
+`make test` runs the unit tests.
+
+`make test-integration` runs the integration test, which runs scan, plan and delete against [AWS Emulator](https://github.com/aws/aws-emulator) instead of a real AWS account. Start the emulator before running it.
+
+```console
+$ aws-emulator --telemetry off &
+$ make test-integration
+```
+
+When the emulator listens on a port other than the default (9297), set `EMULATOR_PORT`.
+
+```console
+$ make test-integration EMULATOR_PORT=9300
+```
+
+The integration test is skipped unless `AWS_ENDPOINT_URL` points to a loopback address.
+
 ## Author
 
 Copyright (c) 2021 FUJIWARA Shunichiro
