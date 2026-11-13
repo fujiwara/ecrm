@@ -4,13 +4,13 @@ import (
 	"context"
 	"io"
 	"log"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/samber/lo"
 )
 
 type Scanner struct {
@@ -216,7 +216,7 @@ func (s *Scanner) availableResourcesInCluster(ctx context.Context, clusterArn st
 			taskArns = append(taskArns, to.TaskArns...)
 		}
 	}
-	for _, tasks := range lo.Chunk(taskArns, 100) { // 100 is the max for describeTasks API
+	for tasks := range slices.Chunk(taskArns, 100) { // 100 is the max for describeTasks API
 		tasks, err := s.ecs.DescribeTasks(ctx, &ecs.DescribeTasksInput{
 			Cluster: &clusterArn,
 			Tasks:   tasks,

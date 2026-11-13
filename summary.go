@@ -15,7 +15,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/renderer"
 	"github.com/olekukonko/tablewriter/tw"
-	"github.com/samber/lo"
 )
 
 const (
@@ -143,9 +142,13 @@ func (s *SummaryTable) Print(w io.Writer, format outputFormat) error {
 func (s SummaryTable) printJSON(w io.Writer) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	ss := lo.Filter(s, func(_s *Summary, _ int) bool {
-		return _s.printable()
-	})
+	// must not be nil to print an empty array instead of null
+	ss := make([]*Summary, 0, len(s))
+	for _, _s := range s {
+		if _s.printable() {
+			ss = append(ss, _s)
+		}
+	}
 	return enc.Encode(ss)
 }
 

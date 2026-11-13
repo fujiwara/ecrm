@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	oci "github.com/google/go-containerregistry/pkg/v1"
 	ociTypes "github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/samber/lo"
 )
 
 type Planner struct {
@@ -33,9 +33,7 @@ func NewPlanner(cfg aws.Config) *Planner {
 type DeletableImageIDs map[RepositoryName][]ecrTypes.ImageIdentifier
 
 func (d DeletableImageIDs) RepositoryNames() []RepositoryName {
-	names := lo.Keys(d)
-	slices.Sort(names)
-	return names
+	return slices.Sorted(maps.Keys(d))
 }
 
 // Plan scans repositories and find expired images, and returns a summary table and a map of deletable image identifiers.
@@ -272,7 +270,7 @@ func (p *Planner) addConstituentImagesToKeep(ctx context.Context, repo Repositor
 		return nil
 	}
 
-	for _, c := range lo.Chunk(keptIndexIDs, batchGetImageLimit) {
+	for c := range slices.Chunk(keptIndexIDs, batchGetImageLimit) {
 		res, err := p.ecr.BatchGetImage(ctx, &ecr.BatchGetImageInput{
 			ImageIds:       c,
 			RepositoryName: aws.String(string(repo)),
@@ -335,7 +333,7 @@ func isKeptImageIndex(d ecrTypes.ImageDetail, region string, keepImages Images) 
 func (p *Planner) findSociIndex(ctx context.Context, repo RepositoryName, imageTags []string) ([]ecrTypes.ImageIdentifier, error) {
 	ids := make([]ecrTypes.ImageIdentifier, 0, len(imageTags))
 
-	for _, c := range lo.Chunk(imageTags, batchGetImageLimit) {
+	for c := range slices.Chunk(imageTags, batchGetImageLimit) {
 		imageIds := make([]ecrTypes.ImageIdentifier, 0, len(c))
 		for _, tag := range c {
 			imageIds = append(imageIds, ecrTypes.ImageIdentifier{ImageTag: aws.String(tag)})

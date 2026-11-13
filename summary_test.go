@@ -2,6 +2,7 @@ package ecrm_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"os"
 	"testing"
@@ -51,6 +52,45 @@ func TestSummaryTablePrintTable(t *testing.T) {
 			}
 			if diff := cmp.Diff(string(want), b.String()); diff != "" {
 				t.Errorf("unexpected table output (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSummaryTablePrintJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		table ecrm.SummaryTable
+		want  []ecrm.Summary
+	}{
+		{
+			name:  "skip index types without images",
+			table: testSummaryTable,
+			want: []ecrm.Summary{
+				*testSummaryTable[0], *testSummaryTable[1], *testSummaryTable[3], *testSummaryTable[4],
+			},
+		},
+		{
+			name:  "empty table is an empty array",
+			table: ecrm.SummaryTable{},
+			want:  []ecrm.Summary{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := new(bytes.Buffer)
+			if err := tt.table.Print(b, ecrm.FormatJSON); err != nil {
+				t.Fatal(err)
+			}
+			var got []ecrm.Summary
+			if err := json.Unmarshal(b.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got == nil {
+				t.Errorf("output must not be null: %s", b.String())
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("unexpected JSON output (-want +got):\n%s", diff)
 			}
 		})
 	}

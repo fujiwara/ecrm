@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdaTypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
-	"github.com/samber/lo"
 )
 
 func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) error {
@@ -60,14 +59,13 @@ func (s *Scanner) scanLambdaFunctions(ctx context.Context, lcs []*LambdaConfig) 
 		// scan the versions
 		// 1. aliased versions
 		// 2. latest keepCount versions
-		scanVersions := lo.Filter(versions, func(v lambdaTypes.FunctionConfiguration, _ int) bool {
-			if _, ok := aliases[*v.Version]; ok {
-				return ok
+		for _, v := range versions {
+			if _, aliased := aliases[*v.Version]; !aliased {
+				kept++
+				if kept > keepCount {
+					continue
+				}
 			}
-			kept++
-			return kept <= keepCount
-		})
-		for _, v := range scanVersions {
 			if err := s.scanLambdaFunctionArn(ctx, *v.FunctionArn, aliases[*v.Version]...); err != nil {
 				return err
 			}
