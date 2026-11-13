@@ -13,6 +13,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/renderer"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/samber/lo"
 )
 
@@ -148,31 +150,39 @@ func (s SummaryTable) printJSON(w io.Writer) error {
 }
 
 func (s SummaryTable) printTable(w io.Writer) error {
-	t := tablewriter.NewWriter(w)
-	t.SetHeader(s.header())
-	t.SetBorder(false)
+	t := tablewriter.NewTable(w,
+		tablewriter.WithRenderer(renderer.NewBlueprint(tw.Rendition{
+			Borders: tw.BorderNone,
+			Symbols: tw.NewSymbols(tw.StyleASCII),
+			Settings: tw.Settings{
+				Lines:      tw.Lines{ShowHeaderLine: tw.On},
+				Separators: tw.Separators{BetweenColumns: tw.On},
+			},
+		})),
+		tablewriter.WithHeaderAlignment(tw.AlignCenter),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+	t.Header(s.header())
+	blue := color.New(color.FgBlue).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
 	for _, s := range s {
 		row := s.row()
 		if !s.printable() {
 			continue
 		}
-		colors := make([]tablewriter.Colors, len(row))
 		if strings.HasPrefix(row[3], "0 ") {
 			row[3] = ""
 		} else {
-			colors[3] = tablewriter.Colors{tablewriter.FgBlueColor}
+			row[3] = blue(row[3])
 		}
 		if strings.HasPrefix(row[4], "0 ") {
-			colors[4] = tablewriter.Colors{tablewriter.FgYellowColor}
+			row[4] = yellow(row[4])
 		}
-		if color.NoColor {
-			t.Append(row)
-		} else {
-			t.Rich(row, colors)
+		if err := t.Append(row); err != nil {
+			return err
 		}
 	}
-	t.Render()
-	return nil
+	return t.Render()
 }
 
 func (s SummaryTable) header() []string {
