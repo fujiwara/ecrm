@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.7.3](https://github.com/fujiwara/ecrm/compare/v0.7.2...v0.7.3) - 2026-11-14
+
+- Bump the aws-sdk-go-v2 group across 1 directory with 5 updates by @dependabot[bot] in https://github.com/fujiwara/ecrm/pull/137
+- Update Go modules and GitHub Actions by @fujiwara in https://github.com/fujiwara/ecrm/pull/147
+- Migrate to tablewriter v1 by @fujiwara in https://github.com/fujiwara/ecrm/pull/148
+- Add an integration test with AWS Emulator by @fujiwara in https://github.com/fujiwara/ecrm/pull/149
+- Replace samber/lo with the standard library by @fujiwara in https://github.com/fujiwara/ecrm/pull/150
+- Rewrite the e2e test as a runn runbook by @fujiwara in https://github.com/fujiwara/ecrm/pull/151
+- Install runn and awslim with mise in CI by @fujiwara in https://github.com/fujiwara/ecrm/pull/152
+
 ## [v0.7.2](https://github.com/fujiwara/ecrm/compare/v0.7.1...v0.7.2) - 2026-06-19
 
 - Update Go toolchain to go1.25.5 by @github-actions[bot] in https://github.com/fujiwara/ecrm/pull/108
