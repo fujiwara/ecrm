@@ -16,3 +16,4 @@
 
 .envrc
 ./ecrm
+test/cmd/ecr-push/ecr-push

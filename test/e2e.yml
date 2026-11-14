@@ -1,0 +1,327 @@
+# End-to-end test of ecrm against AWS Emulator (https://github.com/aws/aws-emulator).
+#
+#   make test-e2e
+#
+# ecrm, awslim and test/cmd/ecr-push call the endpoint in AWS_ENDPOINT_URL.
+# The first step stops the scenario unless it is a loopback address, so this
+# never runs against real AWS.
+#
+# Every resource has a unique prefix and the ecrm configuration is limited to
+# that prefix. That allows running this repeatedly against the same emulator
+# process.
+#
+# Note: runn expands "${NAME}" in this file as an environment variable. Use
+# "$name" for the shell variables in commands.
+desc: ecrm scan, plan and delete
+vars:
+  endpoint: ${AWS_ENDPOINT_URL}
+  region: ${AWS_REGION}
+  ecrm: ./ecrm --no-color
+  push: test/cmd/ecr-push/ecr-push
+steps:
+  require_emulator:
+    desc: AWS_ENDPOINT_URL points to a loopback address
+    test: vars.endpoint matches "^https?://(127\\.0\\.0\\.1|localhost)(:[0-9]+)?/?$"
+
+  prefix:
+    desc: generate a unique prefix of the resources
+    exec:
+      command: echo "ecrm-e2e-$(date +%s)-$$"
+    test: current.exit_code == 0
+    bind:
+      prefix: trim(current.stdout)
+
+  image_base:
+    desc: resolve the base of the image URIs
+    exec:
+      command: awslim sts get-caller-identity --query Account --raw-output
+    test: current.exit_code == 0
+    bind:
+      image_base: trim(current.stdout) + ".dkr.ecr." + vars.region + ".amazonaws.com/" + prefix
+
+  # ---- ECR ----
+
+  create_repositories:
+    exec:
+      command: |
+        for repo in app/web app/multi batch/job unused/old; do
+          awslim ecr create-repository --repository-name {{ prefix }}/$repo
+        done
+    test: current.exit_code == 0
+
+  push_web:
+    desc: "app/web: Docker images v1..v3, OCI images v4..v6 (v6 is also tagged as latest) and an untagged one"
+    exec:
+      command: |
+        repo={{ prefix }}/app/web
+        {{ vars.push }} -docker $repo:v1 $repo:v2 $repo:v3
+        {{ vars.push }} $repo:v4 $repo:v5 $repo:v6,latest $repo
+    test: current.exit_code == 0
+
+  push_multi:
+    desc: "app/multi: image indexes m1..m4, m3 has a soci index for its amd64 image"
+    exec:
+      command: |
+        repo={{ prefix }}/app/multi
+        {{ vars.push }} -index $repo:m1 $repo:m2
+        {{ vars.push }} -index -soci $repo:m3
+        {{ vars.push }} -index $repo:m4
+    test: current.exit_code == 0
+    bind:
+      m1_digest: split(current.stdout, "\n")[0]
+
+  push_job:
+    desc: "batch/job: images j1..j4"
+    exec:
+      command: |
+        repo={{ prefix }}/batch/job
+        {{ vars.push }} $repo:j1 $repo:j2 $repo:j3 $repo:j4
+    test: current.exit_code == 0
+
+  push_old:
+    desc: "unused/old: images o1..o3"
+    exec:
+      command: |
+        repo={{ prefix }}/unused/old
+        {{ vars.push }} $repo:o1 $repo:o2 $repo:o3
+    test: current.exit_code == 0
+
+  # ---- ECS ----
+
+  create_cluster:
+    exec:
+      command: awslim ecs create-cluster --cluster-name {{ prefix }}
+    test: current.exit_code == 0
+
+  register_task_definitions:
+    desc: web:1..4 use app/web:v1..v4, multi:1 uses m1 by digest, multi:2..4 use m2 by tag
+    exec:
+      command: |
+        register() {
+          awslim ecs register-task-definition --family {{ prefix }}-$1 --ext-str image={{ image_base }}/$2 '{
+            RequiresCompatibilities: ["FARGATE"],
+            NetworkMode: "awsvpc",
+            Cpu: "256",
+            Memory: "512",
+            ContainerDefinitions: [{ Name: "app", Essential: true, Image: std.extVar("image") }],
+          }'
+        }
+        for tag in v1 v2 v3 v4; do
+          register web app/web:$tag
+        done
+        register multi app/multi@{{ m1_digest }}
+        for _ in 2 3 4; do
+          register multi app/multi:m2
+        done
+    test: current.exit_code == 0
+
+  create_subnet:
+    desc: Fargate tasks require an existing subnet
+    exec:
+      command: |
+        vpc=$(awslim ec2 create-vpc --cidr-block 10.0.0.0/16 --query Vpc.VpcId --raw-output)
+        awslim ec2 create-subnet --vpc-id $vpc --cidr-block 10.0.0.0/24 --query Subnet.SubnetId --raw-output
+    test: current.exit_code == 0
+    bind:
+      subnet: trim(current.stdout)
+
+  create_service:
+    desc: a service runs web:1, that is out of keep_count of task definitions
+    exec:
+      command: |
+        awslim ecs create-service '{
+          Cluster: "{{ prefix }}",
+          ServiceName: "web",
+          TaskDefinition: "{{ prefix }}-web:1",
+          DesiredCount: 1,
+          LaunchType: "FARGATE",
+          NetworkConfiguration: { AwsvpcConfiguration: { Subnets: ["{{ subnet }}"] } },
+        }'
+    test: current.exit_code == 0
+
+  run_task:
+    desc: a standalone task runs multi:1, that is out of keep_count of task definitions
+    exec:
+      command: |
+        awslim ecs run-task '{
+          Cluster: "{{ prefix }}",
+          TaskDefinition: "{{ prefix }}-multi:1",
+          LaunchType: "FARGATE",
+          NetworkConfiguration: { AwsvpcConfiguration: { Subnets: ["{{ subnet }}"] } },
+        }'
+    test: current.exit_code == 0 && len(fromJSON(current.stdout).Tasks) == 1
+
+  # ---- Lambda ----
+
+  create_function:
+    desc: version 1 uses batch/job:j1
+    exec:
+      command: |
+        awslim lambda create-function '{
+          FunctionName: "{{ prefix }}-job",
+          PackageType: "Image",
+          Code: { ImageUri: "{{ image_base }}/batch/job:j1" },
+          Role: "arn:aws:iam::000000000000:role/{{ prefix }}-lambda",
+          Publish: true,
+        }'
+    test: current.exit_code == 0
+
+  wait_function_active:
+    exec: &get_function
+      command: awslim lambda get-function-configuration --function-name {{ prefix }}-job
+    loop: &until_function_ready
+      count: 60
+      interval: 1
+      until: |
+        current.exit_code == 0
+        && fromJSON(current.stdout).State == "Active"
+        && fromJSON(current.stdout).LastUpdateStatus == "Successful"
+
+  create_alias:
+    desc: the alias current points to version 1
+    exec:
+      command: awslim lambda create-alias --function-name {{ prefix }}-job --name current --function-version 1
+    test: current.exit_code == 0
+
+  update_function:
+    desc: version 2 (latest) uses batch/job:j2
+    exec:
+      command: |
+        awslim lambda update-function-code '{
+          FunctionName: "{{ prefix }}-job",
+          ImageUri: "{{ image_base }}/batch/job:j2",
+          Publish: true,
+        }'
+    test: current.exit_code == 0
+
+  wait_function_updated:
+    exec: *get_function
+    loop: *until_function_ready
+
+  # ---- ecrm ----
+
+  config:
+    desc: write an ecrm configuration limited to the prefix
+    exec:
+      command: |
+        config=$(mktemp)
+        cat > $config <<EOF
+        clusters:
+          - name_pattern: "{{ prefix }}*"
+        task_definitions:
+          - name_pattern: "{{ prefix }}*"
+            keep_count: 2
+        lambda_functions:
+          - name_pattern: "{{ prefix }}*"
+            keep_count: 1
+        repositories:
+          - name_pattern: "{{ prefix }}/*"
+            expires: 1 sec
+            keep_tag_patterns:
+              - latest
+            keep_count: 1
+        EOF
+        echo $config
+        # ImagePushedAt cannot be set, so wait until all the images expire.
+        sleep 1.5
+    test: current.exit_code == 0
+    bind:
+      config: trim(current.stdout)
+
+  scan:
+    desc: scan outputs the image URIs in use
+    exec:
+      command: "{{ vars.ecrm }} scan --config {{ config }}"
+    test: |
+      current.exit_code == 0
+      && compare(fromJSON(current.stdout), [
+        // in use by the latest 2 task definitions
+        image_base + "/app/multi:m2",
+        // in use by a running task (image index by digest, the task definition is out of keep_count)
+        image_base + "/app/multi@" + m1_digest,
+        // in use by a service (the task definition is out of keep_count)
+        image_base + "/app/web:v1",
+        // in use by the latest 2 task definitions
+        image_base + "/app/web:v3",
+        image_base + "/app/web:v4",
+        // in use by a lambda function version with an alias
+        image_base + "/batch/job:j1",
+        // in use by the latest lambda function version
+        image_base + "/batch/job:j2",
+      ])
+
+  plan:
+    desc: plan finds the expired images
+    exec:
+      command: "{{ vars.ecrm }} plan --config {{ config }} --format json"
+    test: |
+      current.exit_code == 0
+      && compare(map(fromJSON(current.stdout), [.repository, .type, .total_images, .expired_images]), [
+        // m3 is not in use and out of keep_count. Its constituents and soci index expire together.
+        [prefix + "/app/multi", "Image", 8, 2],
+        [prefix + "/app/multi", "Image index", 5, 2],
+        [prefix + "/app/multi", "Soci index", 1, 1],
+        // v2 and an untagged image expire.
+        [prefix + "/app/web", "Image", 7, 2],
+        // j3 expires.
+        [prefix + "/batch/job", "Image", 4, 1],
+        // o1 and o2 expire.
+        [prefix + "/unused/old", "Image", 3, 2],
+      ])
+
+  tags_after_plan:
+    desc: plan does not delete anything
+    exec: &tags
+      # prints "{repository}: {sorted tags, except the referrers tags (sha256-...)}" to a line
+      command: |
+        for repo in app/multi app/web batch/job unused/old; do
+          tags=$(awslim ecr describe-images --repository-name {{ prefix }}/$repo --raw-output \
+            --query "join(' ', sort(ImageDetails[].ImageTags[] | [?!starts_with(@, 'sha256-')]))")
+          echo "$repo: $tags"
+        done
+    test: |
+      current.exit_code == 0
+      && compare(split(trim(current.stdout), "\n"), [
+        "app/multi: m1 m2 m3 m4",
+        "app/web: latest v1 v2 v3 v4 v5 v6",
+        "batch/job: j1 j2 j3 j4",
+        "unused/old: o1 o2 o3",
+      ])
+
+  delete:
+    desc: delete removes the expired images
+    exec:
+      command: "{{ vars.ecrm }} delete --config {{ config }} --format json --force"
+    test: current.exit_code == 0
+
+  tags_after_delete:
+    desc: only the expired images are deleted
+    exec: *tags
+    test: |
+      current.exit_code == 0
+      && compare(split(trim(current.stdout), "\n"), [
+        "app/multi: m1 m2 m4",
+        "app/web: latest v1 v3 v4 v5 v6",
+        "batch/job: j1 j2 j4",
+        "unused/old: o3",
+      ])
+
+  plan_after_delete:
+    desc: plan finds no expired images after delete
+    exec:
+      command: "{{ vars.ecrm }} plan --config {{ config }} --format json"
+    test: |
+      current.exit_code == 0
+      && compare(map(fromJSON(current.stdout), [.repository, .type, .total_images, .expired_images]), [
+        [prefix + "/app/multi", "Image", 6, 0],
+        [prefix + "/app/multi", "Image index", 3, 0],
+        [prefix + "/app/web", "Image", 5, 0],
+        [prefix + "/batch/job", "Image", 3, 0],
+        [prefix + "/unused/old", "Image", 1, 0],
+      ])
+
+  cleanup:
+    desc: remove the configuration file even if a step failed
+    defer: true
+    exec:
+      command: rm -f "{{ config }}"
