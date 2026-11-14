@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EMULATOR_TELEMETRY: "off"
+      MISE_ENV: ci # mise.ci.toml
     steps:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -73,31 +74,8 @@ jobs:
           cat "$RUNNER_TEMP/aws-emulator.log"
           exit 1
 
-      - name: Install runn
-        working-directory: ${{ runner.temp }}
-        env:
-          # https://github.com/k1LoW/runn/releases
-          RUNN_VERSION: v1.11.1
-          RUNN_SHA256: 3bdb4a48368ba45831c69719f0c72228c7c8405338ff27f7369095ccf07ea248
-        run: |
-          tarball="runn_${RUNN_VERSION}_linux_amd64.tar.gz"
-          curl -fsSLO "https://github.com/k1LoW/runn/releases/download/${RUNN_VERSION}/${tarball}"
-          echo "${RUNN_SHA256}  ${tarball}" | sha256sum -c -
-          mkdir runn && tar -xzf "$tarball" -C runn
-          echo "$RUNNER_TEMP/runn" >> "$GITHUB_PATH"
-
-      - name: Install awslim
-        working-directory: ${{ runner.temp }}
-        env:
-          # https://github.com/fujiwara/awslim/releases
-          AWSLIM_VERSION: 0.9.0
-          AWSLIM_SHA256: a4afddb032276539bcf00e8f7616182fd4428aa93967e555c6860d0d0a0bc37d
-        run: |
-          tarball="awslim_${AWSLIM_VERSION}_linux_amd64.tar.gz"
-          curl -fsSLO "https://github.com/fujiwara/awslim/releases/download/v${AWSLIM_VERSION}/${tarball}"
-          echo "${AWSLIM_SHA256}  ${tarball}" | sha256sum -c -
-          mkdir awslim && tar -xzf "$tarball" -C awslim
-          echo "$RUNNER_TEMP/awslim" >> "$GITHUB_PATH"
+      - name: Install runn and awslim
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
 
       - name: End-to-end test
         run: make test-e2e

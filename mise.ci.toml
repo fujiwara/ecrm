@@ -1,0 +1,4 @@
+# Tools for the end-to-end test in CI (MISE_ENV=ci).
+[tools]
+"github:k1LoW/runn" = "1.11.1"
+"github:fujiwara/awslim" = "0.9.0"

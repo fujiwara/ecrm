@@ -292,7 +292,7 @@ $ AWS_PROFILE=account-a ecrm delete --scanned-files scan-account-a.json,scan-acc
 
 `make test` runs the unit tests.
 
-`make test-e2e` runs the end-to-end test, which runs `ecrm scan`, `plan` and `delete` against [AWS Emulator](https://github.com/aws/aws-emulator) instead of a real AWS account. The scenario is [test/e2e.yml](test/e2e.yml), a [runn](https://github.com/k1LoW/runn) runbook. It requires runn and [awslim](https://github.com/fujiwara/awslim). Start the emulator before running it.
+`make test-e2e` runs the end-to-end test, which runs `ecrm scan`, `plan` and `delete` against [AWS Emulator](https://github.com/aws/aws-emulator) instead of a real AWS account. The scenario is [test/e2e.yml](test/e2e.yml), a [runn](https://github.com/k1LoW/runn) runbook. It requires runn and [awslim](https://github.com/fujiwara/awslim). [mise](https://mise.jdx.dev/) installs the versions used in CI by `MISE_ENV=ci mise install`. Start the emulator before running it.
 
 ```console
 $ aws-emulator --telemetry off &
