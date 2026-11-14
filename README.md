@@ -292,20 +292,20 @@ $ AWS_PROFILE=account-a ecrm delete --scanned-files scan-account-a.json,scan-acc
 
 `make test` runs the unit tests.
 
-`make test-integration` runs the integration test, which runs scan, plan and delete against [AWS Emulator](https://github.com/aws/aws-emulator) instead of a real AWS account. Start the emulator before running it.
+`make test-e2e` runs the end-to-end test, which runs `ecrm scan`, `plan` and `delete` against [AWS Emulator](https://github.com/aws/aws-emulator) instead of a real AWS account. The scenario is [test/e2e.yml](test/e2e.yml), a [runn](https://github.com/k1LoW/runn) runbook. It requires runn and [awslim](https://github.com/fujiwara/awslim). Start the emulator before running it.
 
 ```console
 $ aws-emulator --telemetry off &
-$ make test-integration
+$ make test-e2e
 ```
 
 When the emulator listens on a port other than the default (9297), set `EMULATOR_PORT`.
 
 ```console
-$ make test-integration EMULATOR_PORT=9300
+$ make test-e2e EMULATOR_PORT=9300
 ```
 
-The integration test is skipped unless `AWS_ENDPOINT_URL` points to a loopback address.
+The scenario creates ECS and Lambda resources with awslim, and pushes dummy images to ECR with [test/cmd/ecr-push](test/cmd/ecr-push). It stops at the first step unless `AWS_ENDPOINT_URL` points to a loopback address.
 
 ## Author
 
